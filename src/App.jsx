@@ -43,7 +43,8 @@ import {
   BarChart3,
   User,
   Wrench,
-  Package
+  Package,
+  Timer
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -162,13 +163,38 @@ const AnalysisReport = ({ records }) => {
         grouped[quarter] = {
           total: 0,
           completed: 0,
+          totalDurationDays: 0, // Accumulator for MTTR
+          completedWithDuration: 0, // Count of records valid for MTTR
           equipmentCounts: {}
         };
       }
       
       const g = grouped[quarter];
       g.total += 1;
-      if (r.status === '已完成') g.completed += 1;
+      
+      if (r.status === '已完成') {
+        g.completed += 1;
+        
+        // Calculate Duration
+        // Priority: completedAt > updatedAt > null
+        let endDate = null;
+        if (r.completedAt) {
+          endDate = r.completedAt.toDate ? r.completedAt.toDate() : new Date(r.completedAt);
+        } else if (r.updatedAt) {
+          endDate = r.updatedAt.toDate ? r.updatedAt.toDate() : new Date(r.updatedAt);
+        }
+
+        if (endDate && r.maintenanceDate) {
+          const startDate = new Date(r.maintenanceDate);
+          const diffTime = endDate - startDate;
+          const diffDays = diffTime / (1000 * 60 * 60 * 24);
+          
+          if (diffDays >= 0) { // Ensure no negative dates
+            g.totalDurationDays += diffDays;
+            g.completedWithDuration += 1;
+          }
+        }
+      }
       
       // Count equipment types
       const type = r.equipmentType || '未分類';
@@ -183,6 +209,10 @@ const AnalysisReport = ({ records }) => {
     <div className="space-y-6">
       {stats.map(([quarter, data]) => {
         const completionRate = data.total > 0 ? Math.round((data.completed / data.total) * 100) : 0;
+        const mttr = data.completedWithDuration > 0 
+          ? (data.totalDurationDays / data.completedWithDuration).toFixed(1) 
+          : "N/A";
+          
         const topEquipment = Object.entries(data.equipmentCounts)
           .sort((a, b) => b[1] - a[1])
           .slice(0, 3); // Top 3
@@ -194,27 +224,39 @@ const AnalysisReport = ({ records }) => {
               <span className="text-sm text-gray-500">總案件: {data.total}</span>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               {/* Metric 1: Completion */}
-              <div className="bg-blue-50 p-3 rounded text-center">
-                <p className="text-xs text-blue-600 font-bold uppercase">完修率</p>
-                <p className="text-2xl font-bold text-blue-900">{completionRate}%</p>
-                <p className="text-xs text-blue-400">{data.completed} / {data.total} 件</p>
+              <div className="bg-blue-50 p-3 rounded text-center border border-blue-100">
+                <p className="text-xs text-blue-600 font-bold uppercase flex justify-center items-center gap-1">
+                  <CheckCircle size={12} /> 完修率
+                </p>
+                <p className="text-2xl font-bold text-blue-900 mt-1">{completionRate}%</p>
+                <p className="text-xs text-blue-400 mt-1">{data.completed} / {data.total} 件</p>
               </div>
 
-              {/* Metric 2: Top Failures */}
-              <div className="bg-orange-50 p-3 rounded col-span-2">
-                <p className="text-xs text-orange-600 font-bold uppercase mb-2">高頻率故障設備 (Top 3)</p>
-                <div className="space-y-1">
+              {/* Metric 2: MTTR (New) */}
+              <div className="bg-purple-50 p-3 rounded text-center border border-purple-100">
+                <p className="text-xs text-purple-600 font-bold uppercase flex justify-center items-center gap-1">
+                  <Timer size={12} /> 平均維修天數
+                </p>
+                <p className="text-2xl font-bold text-purple-900 mt-1">{mttr}</p>
+                <p className="text-xs text-purple-400 mt-1">天</p>
+              </div>
+
+              {/* Metric 3: Top Failures */}
+              <div className="bg-orange-50 p-3 rounded col-span-2 border border-orange-100">
+                <p className="text-xs text-orange-600 font-bold uppercase mb-2">報修系統排名 (Top 3)</p>
+                <div className="space-y-1.5">
                   {topEquipment.map(([type, count], idx) => (
                     <div key={type} className="flex justify-between text-sm items-center">
                       <span className="flex items-center gap-2">
-                        <span className="w-4 h-4 rounded-full bg-orange-200 text-orange-800 flex items-center justify-center text-[10px] font-bold">{idx + 1}</span>
-                        {type}
+                        <span className="w-5 h-5 rounded-full bg-orange-200 text-orange-800 flex items-center justify-center text-[10px] font-bold">{idx + 1}</span>
+                        <span className="text-gray-700">{type}</span>
                       </span>
-                      <span className="font-bold text-gray-600">{count} 件</span>
+                      <span className="font-bold text-orange-700 bg-orange-100 px-2 py-0.5 rounded text-xs">{count} 件</span>
                     </div>
                   ))}
+                  {topEquipment.length === 0 && <span className="text-xs text-gray-400">無資料</span>}
                 </div>
               </div>
             </div>
@@ -477,6 +519,16 @@ export default function App() {
     if (!user) return;
     try {
       const payload = { ...formData, updatedAt: serverTimestamp() };
+      
+      // Update completion time logic:
+      // If setting to "Completed", record the time.
+      if (formData.status === '已完成') {
+        // If it wasn't already completed (or we are creating new as completed), set timestamp
+        if (!editingRecord || editingRecord.status !== '已完成') {
+          payload.completedAt = serverTimestamp();
+        }
+      }
+
       if (editingRecord) {
         const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'maintenance_records', editingRecord.id);
         await updateDoc(docRef, payload);
