@@ -39,7 +39,11 @@ import {
   ChevronUp,
   AlertTriangle,
   List,
-  CheckSquare
+  CheckSquare,
+  BarChart3,
+  User,
+  Wrench,
+  Package
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -85,6 +89,17 @@ const formatDate = (dateObj) => {
   return date.toLocaleString('zh-TW', { hour12: false, month: '2-digit', day: '2-digit', hour: '2-digit', minute:'2-digit' });
 };
 
+const getQuarter = (dateObj) => {
+  if (!dateObj) return 'Unknown';
+  const date = dateObj.toDate ? dateObj.toDate() : new Date(dateObj);
+  const month = date.getMonth() + 1;
+  const year = date.getFullYear();
+  if (month <= 3) return `${year} Q1`;
+  if (month <= 6) return `${year} Q2`;
+  if (month <= 9) return `${year} Q3`;
+  return `${year} Q4`;
+};
+
 // --- Components ---
 
 const StatusBadge = ({ status, startDate }) => {
@@ -94,10 +109,8 @@ const StatusBadge = ({ status, startDate }) => {
   if (status === "已完成") {
     colorClass = "bg-green-100 text-green-800";
   } else if (status === "待料中") {
-    // Light Yellow for Waiting
     colorClass = "bg-yellow-100 text-yellow-800";
   } else if (status === "處理中") {
-    // Light Purple for In Progress (Changed from Orange to distinguish)
     colorClass = "bg-purple-100 text-purple-800";
   } else {
     // Default logic for "未完成" (Time-based)
@@ -134,6 +147,81 @@ const Modal = ({ isOpen, onClose, title, children }) => {
           {children}
         </div>
       </div>
+    </div>
+  );
+};
+
+const AnalysisReport = ({ records }) => {
+  // Group records by Quarter
+  const stats = useMemo(() => {
+    const grouped = {};
+    
+    records.forEach(r => {
+      const quarter = getQuarter(r.maintenanceDate);
+      if (!grouped[quarter]) {
+        grouped[quarter] = {
+          total: 0,
+          completed: 0,
+          equipmentCounts: {}
+        };
+      }
+      
+      const g = grouped[quarter];
+      g.total += 1;
+      if (r.status === '已完成') g.completed += 1;
+      
+      // Count equipment types
+      const type = r.equipmentType || '未分類';
+      g.equipmentCounts[type] = (g.equipmentCounts[type] || 0) + 1;
+    });
+
+    // Sort quarters (newest first)
+    return Object.entries(grouped).sort((a, b) => b[0].localeCompare(a[0]));
+  }, [records]);
+
+  return (
+    <div className="space-y-6">
+      {stats.map(([quarter, data]) => {
+        const completionRate = data.total > 0 ? Math.round((data.completed / data.total) * 100) : 0;
+        const topEquipment = Object.entries(data.equipmentCounts)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3); // Top 3
+
+        return (
+          <div key={quarter} className="bg-white border rounded-lg p-4 shadow-sm">
+            <div className="flex justify-between items-center mb-4 border-b pb-2">
+              <h4 className="text-lg font-bold text-blue-800">{quarter} 維修季報</h4>
+              <span className="text-sm text-gray-500">總案件: {data.total}</span>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Metric 1: Completion */}
+              <div className="bg-blue-50 p-3 rounded text-center">
+                <p className="text-xs text-blue-600 font-bold uppercase">完修率</p>
+                <p className="text-2xl font-bold text-blue-900">{completionRate}%</p>
+                <p className="text-xs text-blue-400">{data.completed} / {data.total} 件</p>
+              </div>
+
+              {/* Metric 2: Top Failures */}
+              <div className="bg-orange-50 p-3 rounded col-span-2">
+                <p className="text-xs text-orange-600 font-bold uppercase mb-2">高頻率故障設備 (Top 3)</p>
+                <div className="space-y-1">
+                  {topEquipment.map(([type, count], idx) => (
+                    <div key={type} className="flex justify-between text-sm items-center">
+                      <span className="flex items-center gap-2">
+                        <span className="w-4 h-4 rounded-full bg-orange-200 text-orange-800 flex items-center justify-center text-[10px] font-bold">{idx + 1}</span>
+                        {type}
+                      </span>
+                      <span className="font-bold text-gray-600">{count} 件</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+      {stats.length === 0 && <div className="text-center text-gray-500 py-8">暫無數據可供分析</div>}
     </div>
   );
 };
@@ -209,6 +297,20 @@ const RecordForm = ({ formData, setFormData, handleSaveRecord, setIsFormOpen }) 
       </div>
     </div>
 
+    {/* New Fields: Parts Used & Repair Staff */}
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="relative">
+        <Package size={14} className="absolute left-2 top-2.5 text-purple-500" />
+        <input placeholder="使用零件 (如: 硬碟 4TB*1, 變壓器*1)" className="w-full pl-7 pr-2 py-1.5 border rounded focus:ring-1 focus:ring-purple-500 outline-none"
+          value={formData.partsUsed} onChange={e => setFormData({...formData, partsUsed: e.target.value})} />
+      </div>
+      <div className="relative">
+        <User size={14} className="absolute left-2 top-2.5 text-purple-500" />
+        <input placeholder="維修人員 (如: 張技師, 廠商A)" className="w-full pl-7 pr-2 py-1.5 border rounded focus:ring-1 focus:ring-purple-500 outline-none"
+          value={formData.repairStaff} onChange={e => setFormData({...formData, repairStaff: e.target.value})} />
+      </div>
+    </div>
+
     <div>
       <textarea 
         placeholder="維修內容簡述..." 
@@ -222,20 +324,20 @@ const RecordForm = ({ formData, setFormData, handleSaveRecord, setIsFormOpen }) 
       <div>
         <label className="block text-xs font-bold text-blue-800 mb-1">報修過程</label>
         <textarea className="w-full p-2 border rounded text-xs resize-none h-20 focus:border-blue-400 outline-none"
-          placeholder="人事時地物..."
+          placeholder="誰發現的？什麼時候？..."
           value={formData.reportLog} onChange={e => setFormData({...formData, reportLog: e.target.value})} />
       </div>
       <div>
-        <label className="block text-xs font-bold text-blue-800 mb-1">處理過程</label>
-        <textarea className="w-full p-2 border rounded text-xs resize-none h-20 focus:border-blue-400 outline-none"
-          placeholder="更換/測試..."
-          value={formData.processLog} onChange={e => setFormData({...formData, processLog: e.target.value})} />
+        <label className="block text-xs font-bold text-red-700 mb-1">故障原因 (原:回報)</label>
+        <textarea className="w-full p-2 border rounded text-xs resize-none h-20 focus:border-red-400 outline-none"
+          placeholder="判定故障主因..."
+          value={formData.feedbackLog} onChange={e => setFormData({...formData, feedbackLog: e.target.value})} />
       </div>
       <div>
-        <label className="block text-xs font-bold text-blue-800 mb-1">回報過程</label>
-        <textarea className="w-full p-2 border rounded text-xs resize-none h-20 focus:border-blue-400 outline-none"
-          placeholder="通知結果..."
-          value={formData.feedbackLog} onChange={e => setFormData({...formData, feedbackLog: e.target.value})} />
+        <label className="block text-xs font-bold text-green-700 mb-1">故障排除維修情形 (原:處理)</label>
+        <textarea className="w-full p-2 border rounded text-xs resize-none h-20 focus:border-green-400 outline-none"
+          placeholder="更換了什麼？測試結果？..."
+          value={formData.processLog} onChange={e => setFormData({...formData, processLog: e.target.value})} />
       </div>
     </div>
 
@@ -257,6 +359,7 @@ export default function App() {
   // UI State
   const [view, setView] = useState('list');
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isAnalysisOpen, setIsAnalysisOpen] = useState(false); // New state for Analysis Modal
   const [deleteTargetId, setDeleteTargetId] = useState(null);
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
@@ -264,9 +367,7 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("All");
   
-  // New State for Sorting Mode: 'default', 'urgent', 'completed'
   const [sortMode, setSortMode] = useState('default');
-  
   const [expandedId, setExpandedId] = useState(null);
 
   const initialFormState = {
@@ -278,9 +379,11 @@ export default function App() {
     contactPhone: "",
     maintenanceDate: new Date().toISOString().slice(0, 16),
     status: "未完成",
-    reportLog: "",
-    processLog: "",
-    feedbackLog: ""
+    reportLog: "",   // 報修過程
+    processLog: "",  // 故障排除 (原處理)
+    feedbackLog: "", // 故障原因 (原回報)
+    partsUsed: "",   // 新增
+    repairStaff: ""  // 新增
   };
   const [formData, setFormData] = useState(initialFormState);
 
@@ -317,7 +420,6 @@ export default function App() {
   const sortedRecords = useMemo(() => {
     let result = [...records];
     
-    // 1. Text Filter (Search)
     if (searchTerm) {
       const lowerTerm = searchTerm.toLowerCase();
       result = result.filter(r => 
@@ -327,41 +429,31 @@ export default function App() {
       );
     }
     
-    // 2. Equipment Type Filter
     if (filterType !== "All") {
       result = result.filter(r => r.equipmentType === filterType);
     }
 
-    // 3. Sort Mode Logic
     if (sortMode === 'urgent') {
-      // 緊急：只顯示「未完成」，依照時間「舊到新」（越舊代表離90天到期越近）
       result = result.filter(r => r.status !== '已完成');
       result.sort((a, b) => {
         const dateA = a.maintenanceDate ? new Date(a.maintenanceDate).getTime() : 0;
         const dateB = b.maintenanceDate ? new Date(b.maintenanceDate).getTime() : 0;
-        return dateA - dateB; // Ascending: Oldest first
+        return dateA - dateB;
       });
     } else if (sortMode === 'completed') {
-      // 已完成：只顯示「已完成」，依照時間「新到舊」
       result = result.filter(r => r.status === '已完成');
       result.sort((a, b) => {
         const dateA = a.maintenanceDate ? new Date(a.maintenanceDate).getTime() : 0;
         const dateB = b.maintenanceDate ? new Date(b.maintenanceDate).getTime() : 0;
-        return dateB - dateA; // Descending: Newest first
+        return dateB - dateA;
       });
     } else {
-      // 預設 (Default)：全部顯示
-      // 邏輯：未完成在最上面 (依照時間新到舊)，已完成在最下面 (依照時間新到舊)
       result.sort((a, b) => {
         const aIsCompleted = a.status === "已完成";
         const bIsCompleted = b.status === "已完成";
-        
-        // If one is completed and other is not, put incomplete first
         if (aIsCompleted !== bIsCompleted) {
           return aIsCompleted ? 1 : -1;
         }
-
-        // Same completion status, sort by date descending (Newest first)
         const dateA = a.maintenanceDate ? new Date(a.maintenanceDate).getTime() : 0;
         const dateB = b.maintenanceDate ? new Date(b.maintenanceDate).getTime() : 0;
         return dateB - dateA;
@@ -425,7 +517,9 @@ export default function App() {
       status: record.status || "未完成",
       reportLog: record.reportLog || "",
       processLog: record.processLog || "",
-      feedbackLog: record.feedbackLog || ""
+      feedbackLog: record.feedbackLog || "",
+      partsUsed: record.partsUsed || "",
+      repairStaff: record.repairStaff || ""
     });
     setIsFormOpen(true);
   };
@@ -435,11 +529,15 @@ export default function App() {
   };
 
   const exportCSV = () => {
-    const headers = ["主題", "狀態", "設備類型", "地點", "聯絡人", "電話", "日期", "維修內容", "報修過程", "處理過程", "回報過程"];
+    const headers = ["主題", "狀態", "設備類型", "地點", "聯絡人", "電話", "日期", "維修內容", "報修過程", "故障排除維修", "故障原因", "使用零件", "維修人員"];
     const csvContent = [
       headers.join(","),
       ...records.map(r => {
-        const row = [r.subject, r.status, r.equipmentType, r.location, r.contactPerson, r.contactPhone, r.maintenanceDate, r.content, r.reportLog, r.processLog, r.feedbackLog];
+        const row = [
+          r.subject, r.status, r.equipmentType, r.location, r.contactPerson, r.contactPhone, 
+          r.maintenanceDate, r.content, r.reportLog, r.processLog, r.feedbackLog,
+          r.partsUsed, r.repairStaff
+        ];
         return row.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(",");
       })
     ].join("\n");
@@ -459,7 +557,6 @@ export default function App() {
     const reader = new FileReader();
     reader.onload = async (e) => {
       const buffer = e.target.result;
-      
       let text = '';
       const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
       const big5Decoder = new TextDecoder('big5');
@@ -467,13 +564,7 @@ export default function App() {
       try {
         text = utf8Decoder.decode(buffer);
       } catch (err) {
-        console.log("UTF-8 decoding failed, trying Big5...");
-        try {
-          text = big5Decoder.decode(buffer);
-        } catch (err2) {
-          alert("檔案編碼無法識別，請確認檔案格式");
-          return;
-        }
+        try { text = big5Decoder.decode(buffer); } catch (err2) { alert("檔案編碼無法識別"); return; }
       }
 
       const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
@@ -491,18 +582,10 @@ export default function App() {
         for (let i = 0; i < line.length; i++) {
           const char = line[i];
           if (char === '"') {
-             if (inQuote && line[i+1] === '"') {
-               current += '"';
-               i++;
-             } else {
-               inQuote = !inQuote;
-             }
+             if (inQuote && line[i+1] === '"') { current += '"'; i++; } else { inQuote = !inQuote; }
           } else if (char === sep && !inQuote) {
-             result.push(current.trim());
-             current = '';
-          } else {
-             current += char;
-          }
+             result.push(current.trim()); current = '';
+          } else { current += char; }
         }
         result.push(current.trim());
         return result;
@@ -525,13 +608,13 @@ export default function App() {
                reportLog: cols[8] || "",
                processLog: cols[9] || "",
                feedbackLog: cols[10] || "",
+               partsUsed: cols[11] || "",
+               repairStaff: cols[12] || "",
                createdAt: serverTimestamp(),
                imported: true
              });
              count++;
-          } catch(err) {
-            console.error("Import row error", err);
-          }
+          } catch(err) { console.error("Import row error", err); }
         }
       }
       alert(`成功匯入 ${count} 筆資料`);
@@ -555,6 +638,14 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-3 mt-2 sm:mt-0">
+            {/* Analysis Button */}
+            <button 
+              onClick={() => setIsAnalysisOpen(true)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-sm transition shadow-md border border-indigo-500"
+            >
+              <BarChart3 size={16} /> 分析報告
+            </button>
+
             {view === 'list' ? (
               <button onClick={() => setView('admin')} className="flex items-center gap-2 px-3 py-1.5 bg-blue-800 hover:bg-blue-700 rounded text-sm transition border border-blue-700">
                 <Settings size={16} /> 管理介面
@@ -579,57 +670,22 @@ export default function App() {
         
         {/* Filters and Sorting Buttons */}
         <div className="mb-6 space-y-3">
-          {/* Top Row: Sorting Buttons */}
           <div className="flex flex-wrap gap-2">
-            
-            {/* 1. Default (Time Sort) - Left */}
-            <button 
-              onClick={() => setSortMode('default')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm
-                ${sortMode === 'default' 
-                  ? 'bg-blue-600 text-white ring-2 ring-blue-300' 
-                  : 'bg-white text-gray-700 hover:bg-blue-50 border border-gray-200'}`}
-            >
-              <List size={16} className={sortMode === 'default' ? 'text-white' : 'text-blue-500'} />
-              時間排序
+            <button onClick={() => setSortMode('default')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm ${sortMode === 'default' ? 'bg-blue-600 text-white ring-2 ring-blue-300' : 'bg-white text-gray-700 hover:bg-blue-50 border border-gray-200'}`}>
+              <List size={16} className={sortMode === 'default' ? 'text-white' : 'text-blue-500'} /> 時間排序
             </button>
-
-            {/* 2. Urgent - Middle */}
-            <button 
-              onClick={() => setSortMode('urgent')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm
-                ${sortMode === 'urgent' 
-                  ? 'bg-red-600 text-white ring-2 ring-red-300' 
-                  : 'bg-white text-gray-700 hover:bg-red-50 border border-gray-200'}`}
-            >
-              <AlertTriangle size={16} className={sortMode === 'urgent' ? 'text-white' : 'text-red-500'} />
-              緊急
+            <button onClick={() => setSortMode('urgent')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm ${sortMode === 'urgent' ? 'bg-red-600 text-white ring-2 ring-red-300' : 'bg-white text-gray-700 hover:bg-red-50 border border-gray-200'}`}>
+              <AlertTriangle size={16} className={sortMode === 'urgent' ? 'text-white' : 'text-red-500'} /> 緊急
             </button>
-            
-            {/* 3. Completed - Right */}
-            <button 
-              onClick={() => setSortMode('completed')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm
-                ${sortMode === 'completed' 
-                  ? 'bg-green-600 text-white ring-2 ring-green-300' 
-                  : 'bg-white text-gray-700 hover:bg-green-50 border border-gray-200'}`}
-            >
-              <CheckSquare size={16} className={sortMode === 'completed' ? 'text-white' : 'text-green-500'} />
-              已完成
+            <button onClick={() => setSortMode('completed')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm ${sortMode === 'completed' ? 'bg-green-600 text-white ring-2 ring-green-300' : 'bg-white text-gray-700 hover:bg-green-50 border border-gray-200'}`}>
+              <CheckSquare size={16} className={sortMode === 'completed' ? 'text-white' : 'text-green-500'} /> 已完成
             </button>
           </div>
 
-          {/* Bottom Row: Search & Type Filter */}
           <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-200 flex flex-col md:flex-row gap-4 justify-between items-center">
             <div className="flex items-center gap-2 w-full md:w-auto">
               <Search className="text-gray-400" size={20} />
-              <input 
-                type="text" 
-                placeholder="搜尋主題、地點、聯絡人..." 
-                className="pl-2 pr-4 py-2 border rounded w-full md:w-64 focus:ring-2 focus:ring-blue-500 outline-none"
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-              />
+              <input type="text" placeholder="搜尋主題、地點、聯絡人..." className="pl-2 pr-4 py-2 border rounded w-full md:w-64 focus:ring-2 focus:ring-blue-500 outline-none" value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
             </div>
             <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto">
               <Filter size={20} className="text-gray-500" />
@@ -646,135 +702,84 @@ export default function App() {
           <AdminLogin passwordInput={passwordInput} setPasswordInput={setPasswordInput} handleAdminLogin={handleAdminLogin} />
         ) : (
           <div className="space-y-3">
-            {/* Admin Toolbar */}
             {view === 'admin' && isAdminLoggedIn && (
               <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-lg mb-4 flex flex-wrap gap-4 items-center justify-between">
                 <div className="flex items-center gap-2 text-yellow-800 font-semibold">
                   <Settings size={20} /> 管理員模式
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={exportCSV} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded hover:bg-gray-50 text-sm">
-                    <Download size={16} /> 匯出 CSV
-                  </button>
-                  <label className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 cursor-pointer text-sm">
-                    <Upload size={16} /> 匯入 CSV
-                    <input type="file" accept=".csv" className="hidden" onChange={importCSV} />
-                  </label>
+                  <button onClick={exportCSV} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded hover:bg-gray-50 text-sm"><Download size={16} /> 匯出 CSV</button>
+                  <label className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 cursor-pointer text-sm"><Upload size={16} /> 匯入 CSV <input type="file" accept=".csv" className="hidden" onChange={importCSV} /></label>
                 </div>
               </div>
             )}
 
-            {/* List */}
             {loading ? (
               <div className="text-center py-10 text-gray-500">載入中...</div>
             ) : sortedRecords.length === 0 ? (
               <div className="text-center py-10 bg-white rounded shadow-sm border border-dashed border-gray-300">
                 <p className="text-gray-500">目前沒有符合條件的維修紀錄</p>
-                {sortMode !== 'completed' && (
-                  <button onClick={() => setIsFormOpen(true)} className="mt-2 text-blue-600 font-semibold hover:underline">立即新增一筆</button>
-                )}
+                {sortMode !== 'completed' && <button onClick={() => setIsFormOpen(true)} className="mt-2 text-blue-600 font-semibold hover:underline">立即新增一筆</button>}
               </div>
             ) : (
               <div className="grid gap-3">
                 {sortedRecords.map((record) => {
                   const isExpanded = expandedId === record.id;
                   return (
-                    <div 
-                      key={record.id} 
-                      onClick={() => toggleExpand(record.id)}
-                      className={`bg-white rounded-lg shadow-sm border transition duration-200 overflow-hidden cursor-pointer hover:shadow-md ${isExpanded ? 'border-blue-300 ring-1 ring-blue-200' : 'border-gray-200'}`}
-                    >
-                      {/* Condensed Header Row */}
+                    <div key={record.id} onClick={() => toggleExpand(record.id)} className={`bg-white rounded-lg shadow-sm border transition duration-200 overflow-hidden cursor-pointer hover:shadow-md ${isExpanded ? 'border-blue-300 ring-1 ring-blue-200' : 'border-gray-200'}`}>
                       <div className="p-4 flex items-center justify-between gap-4">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-3">
-                            <h3 className="text-base font-bold text-gray-800 truncate">
-                              {record.subject}
-                            </h3>
-                            {record.equipmentType && (
-                              <span className="hidden sm:inline-block px-2 py-0.5 rounded text-[10px] bg-gray-100 text-gray-500 border border-gray-200 whitespace-nowrap">
-                                {record.equipmentType}
-                              </span>
-                            )}
+                            <h3 className="text-base font-bold text-gray-800 truncate">{record.subject}</h3>
+                            {record.equipmentType && <span className="hidden sm:inline-block px-2 py-0.5 rounded text-[10px] bg-gray-100 text-gray-500 border border-gray-200 whitespace-nowrap">{record.equipmentType}</span>}
                           </div>
-                          <div className="text-xs text-gray-400 mt-1 flex items-center gap-2">
-                            <Calendar size={12} /> {formatDate(record.maintenanceDate)}
-                          </div>
+                          <div className="text-xs text-gray-400 mt-1 flex items-center gap-2"><Calendar size={12} /> {formatDate(record.maintenanceDate)}</div>
                         </div>
-                        
                         <div className="flex items-center gap-3 shrink-0">
                           <StatusBadge status={record.status} startDate={record.maintenanceDate} />
                           {isExpanded ? <ChevronUp size={20} className="text-gray-400" /> : <ChevronDown size={20} className="text-gray-400" />}
                         </div>
                       </div>
                       
-                      {/* Expanded Content */}
                       {isExpanded && (
                         <div className="px-4 pb-4 bg-gray-50 border-t border-gray-100 cursor-default" onClick={e => e.stopPropagation()}>
-                          
-                          {/* Contact Info Row */}
                           <div className="py-3 flex flex-wrap gap-y-2 gap-x-6 text-sm text-gray-600 border-b border-gray-200">
-                             <div className="flex items-center gap-2">
-                               <MapPin size={16} className="text-gray-400" /> 
-                               <span className="font-medium text-gray-700">地點：</span>{record.location || "未填寫"}
-                             </div>
-                             <div className="flex items-center gap-2">
-                               <Phone size={16} className="text-gray-400" /> 
-                               <span className="font-medium text-gray-700">聯絡：</span>{record.contactPerson} {record.contactPhone && `(${record.contactPhone})`}
-                             </div>
-                             <div className="flex items-center gap-2 sm:hidden">
-                               <Settings size={16} className="text-gray-400" /> 
-                               <span className="font-medium text-gray-700">類別：</span>{record.equipmentType}
-                             </div>
+                             <div className="flex items-center gap-2"><MapPin size={16} className="text-gray-400" /> <span className="font-medium text-gray-700">地點：</span>{record.location || "未填寫"}</div>
+                             <div className="flex items-center gap-2"><Phone size={16} className="text-gray-400" /> <span className="font-medium text-gray-700">聯絡：</span>{record.contactPerson} {record.contactPhone && `(${record.contactPhone})`}</div>
+                             <div className="flex items-center gap-2 sm:hidden"><Settings size={16} className="text-gray-400" /> <span className="font-medium text-gray-700">類別：</span>{record.equipmentType}</div>
+                             
+                             {/* Display New Fields */}
+                             <div className="flex items-center gap-2"><User size={16} className="text-purple-400" /> <span className="font-medium text-purple-700">維修：</span>{record.repairStaff || "-"}</div>
+                             <div className="flex items-center gap-2"><Package size={16} className="text-purple-400" /> <span className="font-medium text-purple-700">零件：</span>{record.partsUsed || "-"}</div>
                           </div>
-
-                          {/* Content */}
                           <div className="py-3">
                             <p className="text-sm font-medium text-gray-700 mb-1">維修內容簡述：</p>
-                            <p className="text-sm text-gray-600 bg-white p-3 rounded border border-gray-200 whitespace-pre-line">
-                              {record.content || "無內容"}
-                            </p>
+                            <p className="text-sm text-gray-600 bg-white p-3 rounded border border-gray-200 whitespace-pre-line">{record.content || "無內容"}</p>
                           </div>
-                          
-                          {/* Logs */}
                           {(record.reportLog || record.processLog || record.feedbackLog) && (
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs mt-2">
                               <div className="bg-blue-50 p-2 rounded border border-blue-100">
-                                <span className="font-bold text-blue-700 block mb-1">報修過程：</span> 
-                                <span className="text-gray-700 whitespace-pre-line">{record.reportLog || "-"}</span>
+                                <span className="font-bold text-blue-700 block mb-1">報修過程：</span> <span className="text-gray-700 whitespace-pre-line">{record.reportLog || "-"}</span>
                               </div>
-                              <div className="bg-blue-50 p-2 rounded border border-blue-100">
-                                <span className="font-bold text-blue-700 block mb-1">處理過程：</span> 
-                                <span className="text-gray-700 whitespace-pre-line">{record.processLog || "-"}</span>
+                              <div className="bg-green-50 p-2 rounded border border-green-100">
+                                <span className="font-bold text-green-700 block mb-1">故障排除維修 (原處理)：</span> <span className="text-gray-700 whitespace-pre-line">{record.processLog || "-"}</span>
                               </div>
-                              <div className="bg-blue-50 p-2 rounded border border-blue-100">
-                                <span className="font-bold text-blue-700 block mb-1">回報過程：</span> 
-                                <span className="text-gray-700 whitespace-pre-line">{record.feedbackLog || "-"}</span>
+                              <div className="bg-red-50 p-2 rounded border border-red-100">
+                                <span className="font-bold text-red-700 block mb-1">故障原因 (原回報)：</span> <span className="text-gray-700 whitespace-pre-line">{record.feedbackLog || "-"}</span>
                               </div>
                             </div>
                           )}
-
-                          {/* Admin Actions */}
                           {view === 'admin' && isAdminLoggedIn && (
                             <div className="flex justify-end gap-3 mt-4 pt-3 border-t border-gray-200">
-                              <button onClick={() => handleEdit(record)} className="flex items-center gap-1 px-3 py-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded text-sm transition font-medium">
-                                <Edit size={14} /> 編輯
-                              </button>
-                              <button onClick={() => setDeleteTargetId(record.id)} className="flex items-center gap-1 px-3 py-1.5 text-red-600 bg-red-50 hover:bg-red-100 rounded text-sm transition font-medium">
-                                <Trash2 size={14} /> 刪除
-                              </button>
+                              <button onClick={() => handleEdit(record)} className="flex items-center gap-1 px-3 py-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded text-sm transition font-medium"><Edit size={14} /> 編輯</button>
+                              <button onClick={() => setDeleteTargetId(record.id)} className="flex items-center gap-1 px-3 py-1.5 text-red-600 bg-red-50 hover:bg-red-100 rounded text-sm transition font-medium"><Trash2 size={14} /> 刪除</button>
                             </div>
                           )}
                         </div>
                       )}
-
-                      {/* Progress Bar */}
                       {record.status !== "已完成" && (
                         <div className="h-1 w-full bg-gray-100">
-                          <div 
-                            className={`h-full ${calculateDaysLeft(record.maintenanceDate) < 30 ? 'bg-red-500' : 'bg-blue-500'}`} 
-                            style={{ width: `${Math.max(0, (calculateDaysLeft(record.maintenanceDate) / 90) * 100)}%` }}
-                          />
+                          <div className={`h-full ${calculateDaysLeft(record.maintenanceDate) < 30 ? 'bg-red-500' : 'bg-blue-500'}`} style={{ width: `${Math.max(0, (calculateDaysLeft(record.maintenanceDate) / 90) * 100)}%` }} />
                         </div>
                       )}
                     </div>
@@ -787,57 +792,29 @@ export default function App() {
       </main>
 
       {/* Create/Edit Modal */}
-      <Modal 
-        isOpen={isFormOpen} 
-        onClose={() => setIsFormOpen(false)} 
-        title={editingRecord ? "編輯維修紀錄" : "新增維修紀錄"}
-      >
-        <RecordForm 
-          formData={formData}
-          setFormData={setFormData}
-          handleSaveRecord={handleSaveRecord}
-          setIsFormOpen={setIsFormOpen}
-        />
+      <Modal isOpen={isFormOpen} onClose={() => setIsFormOpen(false)} title={editingRecord ? "編輯維修紀錄" : "新增維修紀錄"}>
+        <RecordForm formData={formData} setFormData={setFormData} handleSaveRecord={handleSaveRecord} setIsFormOpen={setIsFormOpen} />
+      </Modal>
+
+      {/* Analysis Modal */}
+      <Modal isOpen={isAnalysisOpen} onClose={() => setIsAnalysisOpen(false)} title="📊 維修分析報告">
+        <AnalysisReport records={records} />
       </Modal>
 
       {/* Delete Confirmation Modal */}
-      <Modal 
-        isOpen={!!deleteTargetId} 
-        onClose={() => setDeleteTargetId(null)} 
-        title="確認刪除"
-      >
+      <Modal isOpen={!!deleteTargetId} onClose={() => setDeleteTargetId(null)} title="確認刪除">
         <div className="space-y-4">
           <p className="text-gray-700 font-medium">您確定要刪除此筆維修紀錄嗎？</p>
           <p className="text-sm text-red-600 bg-red-50 p-2 rounded">此動作無法復原，資料將永久遺失。</p>
           <div className="flex justify-end gap-3 pt-2">
-            <button 
-              onClick={() => setDeleteTargetId(null)} 
-              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
-            >
-              取消
-            </button>
-            <button 
-              onClick={executeDelete} 
-              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 flex items-center gap-2"
-            >
-              <Trash2 size={18} /> 確認刪除
-            </button>
+            <button onClick={() => setDeleteTargetId(null)} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">取消</button>
+            <button onClick={executeDelete} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 flex items-center gap-2"><Trash2 size={18} /> 確認刪除</button>
           </div>
         </div>
       </Modal>
 
       {/* Floating Action Button (Mobile) */}
-      <button 
-        onClick={() => {
-          setEditingRecord(null);
-          setFormData(initialFormState);
-          setIsFormOpen(true);
-        }}
-        className="md:hidden fixed bottom-6 right-6 bg-blue-600 text-white p-4 rounded-full shadow-xl z-30 hover:bg-blue-700 transition"
-      >
-        <Plus size={24} />
-      </button>
-
+      <button onClick={() => { setEditingRecord(null); setFormData(initialFormState); setIsFormOpen(true); }} className="md:hidden fixed bottom-6 right-6 bg-blue-600 text-white p-4 rounded-full shadow-xl z-30 hover:bg-blue-700 transition"><Plus size={24} /></button>
     </div>
   );
 }
