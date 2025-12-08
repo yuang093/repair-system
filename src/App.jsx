@@ -17,6 +17,7 @@ import {
   serverTimestamp,
   Timestamp
 } from 'firebase/firestore';
+// 移除 Storage 引用，因為我們改用 Base64
 import { 
   Plus, 
   Search, 
@@ -45,7 +46,10 @@ import {
   Wrench,
   Package,
   Timer,
-  Siren // New Icon
+  Siren,
+  Camera,
+  Image as ImageIcon,
+  Loader2
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -62,6 +66,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+// const storage = getStorage(app); // 不再需要 Storage
 
 // 定義 appId 用於資料庫路徑
 const appId = 'repair-system-v1';
@@ -100,6 +105,48 @@ const getQuarter = (dateObj) => {
   if (month <= 6) return `${year} Q2`;
   if (month <= 9) return `${year} Q3`;
   return `${year} Q4`;
+};
+
+// --- Image Compression Helper (New) ---
+const compressImage = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_WIDTH = 800; // 限制最大寬度
+        const MAX_HEIGHT = 800;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height *= MAX_WIDTH / width;
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width *= MAX_HEIGHT / height;
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // 壓縮成 JPEG, 品質 0.6 (約縮小到 50-100KB)
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+        resolve(dataUrl);
+      };
+      img.onerror = (error) => reject(error);
+    };
+    reader.onerror = (error) => reject(error);
+  });
 };
 
 // --- Components ---
@@ -154,7 +201,6 @@ const Modal = ({ isOpen, onClose, title, children }) => {
 };
 
 const AnalysisReport = ({ records }) => {
-  // Group records by Quarter
   const stats = useMemo(() => {
     const grouped = {};
     
@@ -286,10 +332,9 @@ const AdminLogin = ({ passwordInput, setPasswordInput, handleAdminLogin }) => (
   </div>
 );
 
-const RecordForm = ({ formData, setFormData, handleSaveRecord, setIsFormOpen }) => (
+const RecordForm = ({ formData, setFormData, handleSaveRecord, setIsFormOpen, selectedFile, setSelectedFile, isUploading }) => (
   <form onSubmit={handleSaveRecord} className="flex flex-col gap-3 text-sm">
     
-    {/* Header Row with Urgent Toggle */}
     <div className="flex justify-between items-center bg-gray-100 p-2 rounded border mb-1">
       <div className="font-bold text-gray-700 text-base">基本資料填寫</div>
       <button
@@ -350,7 +395,6 @@ const RecordForm = ({ formData, setFormData, handleSaveRecord, setIsFormOpen }) 
       </div>
     </div>
 
-    {/* New Fields: Parts Used & Repair Staff */}
     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
       <div className="relative">
         <Package size={14} className="absolute left-2 top-2.5 text-purple-500" />
@@ -394,10 +438,61 @@ const RecordForm = ({ formData, setFormData, handleSaveRecord, setIsFormOpen }) 
       </div>
     </div>
 
+    <div className="bg-gray-50 p-3 rounded border border-dashed border-gray-400">
+      <label className="flex flex-col items-center justify-center cursor-pointer">
+        <div className="flex items-center gap-2 text-gray-600 mb-1">
+          <Camera size={20} />
+          <span className="font-bold text-sm">上傳現場照片 (自動壓縮)</span>
+        </div>
+        <input 
+          type="file" 
+          accept="image/*" 
+          className="hidden"
+          onChange={(e) => {
+            if (e.target.files && e.target.files[0]) {
+              setSelectedFile(e.target.files[0]);
+            }
+          }}
+        />
+        <div className="text-xs text-gray-400 text-center">
+          {selectedFile ? (
+            <span className="text-green-600 font-bold">✅ 已選擇: {selectedFile.name}</span>
+          ) : formData.imageUrl ? (
+            <span className="text-blue-600">ℹ️ 已有照片，上傳新檔將覆蓋</span>
+          ) : (
+            "點擊選擇圖片 (支援 JPG, PNG)"
+          )}
+        </div>
+      </label>
+      
+      {(selectedFile || formData.imageUrl) && (
+        <div className="mt-2 flex justify-center">
+          <img 
+            src={selectedFile ? URL.createObjectURL(selectedFile) : formData.imageUrl} 
+            alt="Preview" 
+            className="h-32 object-contain rounded border bg-white"
+          />
+        </div>
+      )}
+    </div>
+
     <div className="flex justify-end gap-3 mt-1 pt-3 border-t">
       <button type="button" onClick={() => setIsFormOpen(false)} className="px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded">取消</button>
-      <button type="submit" className="px-6 py-1.5 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 flex items-center gap-2">
-        <Save size={16} /> 儲存紀錄
+      <button 
+        type="submit" 
+        disabled={isUploading}
+        className={`px-6 py-1.5 text-white text-sm font-medium rounded flex items-center gap-2 transition
+          ${isUploading ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+      >
+        {isUploading ? (
+          <>
+            <Loader2 size={16} className="animate-spin" /> 處理中...
+          </>
+        ) : (
+          <>
+            <Save size={16} /> 儲存紀錄
+          </>
+        )}
       </button>
     </div>
   </form>
@@ -420,6 +515,10 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("All");
   
+  // File Upload State
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  
   const [sortMode, setSortMode] = useState('default');
   const [expandedId, setExpandedId] = useState(null);
 
@@ -437,7 +536,8 @@ export default function App() {
     feedbackLog: "", 
     partsUsed: "",   
     repairStaff: "", 
-    isUrgent: false // New field
+    isUrgent: false,
+    imageUrl: "" 
   };
   const [formData, setFormData] = useState(initialFormState);
 
@@ -487,38 +587,26 @@ export default function App() {
       result = result.filter(r => r.equipmentType === filterType);
     }
 
-    // Sort Function
     result.sort((a, b) => {
-      // 1. PIN URGENT ITEMS TO TOP (Only if not completed)
-      // Urgent items that are NOT completed should always be first
       const aIsPinned = a.isUrgent && a.status !== '已完成';
       const bIsPinned = b.isUrgent && b.status !== '已完成';
 
       if (aIsPinned && !bIsPinned) return -1;
       if (!aIsPinned && bIsPinned) return 1;
 
-      // 2. Standard Sorting based on Mode
       if (sortMode === 'urgent') {
-        // Mode "Urgent" (Expire Soon)
-        // If one is completed, put at bottom
         if (a.status === '已完成' && b.status !== '已完成') return 1;
         if (a.status !== '已完成' && b.status === '已完成') return -1;
-
         const dateA = a.maintenanceDate ? new Date(a.maintenanceDate).getTime() : 0;
         const dateB = b.maintenanceDate ? new Date(b.maintenanceDate).getTime() : 0;
-        return dateA - dateB; // Oldest first
+        return dateA - dateB;
       } else if (sortMode === 'completed') {
-        // Mode "Completed"
-        // If one is not completed, filter out? No, just sort. But UI usually filters.
-        // Assuming filtered before or handled here.
         if (a.status !== '已完成' && b.status === '已完成') return 1;
         if (a.status === '已完成' && b.status !== '已完成') return -1;
-
         const dateA = a.maintenanceDate ? new Date(a.maintenanceDate).getTime() : 0;
         const dateB = b.maintenanceDate ? new Date(b.maintenanceDate).getTime() : 0;
-        return dateB - dateA; // Newest first
+        return dateB - dateA;
       } else {
-        // Mode "Default" (Time Sort)
         const aIsCompleted = a.status === "已完成";
         const bIsCompleted = b.status === "已完成";
         if (aIsCompleted !== bIsCompleted) {
@@ -526,15 +614,13 @@ export default function App() {
         }
         const dateA = a.maintenanceDate ? new Date(a.maintenanceDate).getTime() : 0;
         const dateB = b.maintenanceDate ? new Date(b.maintenanceDate).getTime() : 0;
-        return dateB - dateA; // Newest first
+        return dateB - dateA; 
       }
     });
 
-    // Apply Filter for Completed Mode strictly
     if (sortMode === 'completed') {
       result = result.filter(r => r.status === '已完成');
     }
-    // Apply Filter for Urgent Mode (Expire Soon) strictly -> Uncompleted
     if (sortMode === 'urgent') {
       result = result.filter(r => r.status !== '已完成');
     }
@@ -551,11 +637,25 @@ export default function App() {
     }
   };
 
+  // 修改後的儲存邏輯: 處理 Base64 壓縮
   const handleSaveRecord = async (e) => {
     e.preventDefault();
     if (!user) return;
+    setIsUploading(true);
+
     try {
-      const payload = { ...formData, updatedAt: serverTimestamp() };
+      let url = formData.imageUrl || "";
+
+      // 使用 Base64 壓縮邏輯
+      if (selectedFile) {
+        url = await compressImage(selectedFile);
+      }
+
+      const payload = { 
+        ...formData, 
+        imageUrl: url,
+        updatedAt: serverTimestamp() 
+      };
       
       if (formData.status === '已完成') {
         if (!editingRecord || editingRecord.status !== '已完成') {
@@ -574,9 +674,12 @@ export default function App() {
       setIsFormOpen(false);
       setEditingRecord(null);
       setFormData(initialFormState);
+      setSelectedFile(null);
     } catch (error) {
       console.error("Error saving:", error);
-      alert("儲存失敗，請重試");
+      alert("儲存失敗，請檢查網路連線或圖片大小");
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -592,6 +695,7 @@ export default function App() {
 
   const handleEdit = (record) => {
     setEditingRecord(record);
+    setSelectedFile(null); // Reset selected file on edit
     setFormData({
       subject: record.subject || "",
       equipmentType: record.equipmentType || EQUIPMENT_TYPES[0],
@@ -606,7 +710,8 @@ export default function App() {
       feedbackLog: record.feedbackLog || "",
       partsUsed: record.partsUsed || "",
       repairStaff: record.repairStaff || "",
-      isUrgent: record.isUrgent || false // Load existing value
+      isUrgent: record.isUrgent || false,
+      imageUrl: record.imageUrl || ""
     });
     setIsFormOpen(true);
   };
@@ -616,14 +721,14 @@ export default function App() {
   };
 
   const exportCSV = () => {
-    const headers = ["主題", "狀態", "緊急", "設備類型", "地點", "聯絡人", "電話", "日期", "維修內容", "報修過程", "故障排除維修", "故障原因", "使用零件", "維修人員"];
+    const headers = ["主題", "狀態", "緊急", "設備類型", "地點", "聯絡人", "電話", "日期", "維修內容", "報修過程", "故障排除維修", "故障原因", "使用零件", "維修人員", "圖片連結"];
     const csvContent = [
       headers.join(","),
       ...records.map(r => {
         const row = [
           r.subject, r.status, r.isUrgent ? "是" : "否", r.equipmentType, r.location, r.contactPerson, r.contactPhone, 
           r.maintenanceDate, r.content, r.reportLog, r.processLog, r.feedbackLog,
-          r.partsUsed, r.repairStaff
+          r.partsUsed, r.repairStaff, "圖片太長略過" // CSV 不存 Base64
         ];
         return row.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(",");
       })
@@ -683,22 +788,11 @@ export default function App() {
         const cols = parseLine(row, delimiter);
         if (cols.length >= 7) {
           try {
-             // Basic structure assumption, adjusting for potential new columns if importing older CSVs might fail slightly if strict, 
-             // but here we try to map.
-             // Updated import logic to check length or map blindly if format matches.
-             // Since format changed, import might be tricky for old CSVs. 
-             // We will stick to the previous mapping logic but add defaults.
              await addDoc(colRef, {
                subject: cols[0] || "匯入資料",
                status: cols[1] || "未完成",
-               // isUrgent not in old CSVs, default false. If column 2 is "是" then true.
                isUrgent: cols[2] === "是", 
-               equipmentType: cols[3] || "其他", // Shifted index if users use new CSV format, but keeping old logic safe?
-               // Actually, for safety, if user imports OLD format CSV, indices are shifted. 
-               // For now assuming user imports NEW format CSV or accepts misalignment. 
-               // To be robust: Check if header has '緊急'. If not, use old mapping.
-               // Simplified here: Assuming imports follow export structure or we map based on column count?
-               // Let's stick to safe defaults.
+               equipmentType: cols[3] || "其他", 
                location: cols[4] || "",
                contactPerson: cols[5] || "",
                contactPhone: cols[6] || "",
@@ -709,6 +803,7 @@ export default function App() {
                feedbackLog: cols[11] || "",
                partsUsed: cols[12] || "",
                repairStaff: cols[13] || "",
+               imageUrl: "", // Import doesn't support Base64 yet
                createdAt: serverTimestamp(),
                imported: true
              });
@@ -755,7 +850,7 @@ export default function App() {
               </button>
             )}
             <button 
-              onClick={() => { setEditingRecord(null); setFormData(initialFormState); setIsFormOpen(true); }}
+              onClick={() => { setEditingRecord(null); setFormData(initialFormState); setSelectedFile(null); setIsFormOpen(true); }}
               className="flex items-center gap-2 px-4 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded font-medium shadow-md transition"
             >
               <Plus size={18} /> 新增報修
@@ -851,6 +946,18 @@ export default function App() {
                       
                       {isExpanded && (
                         <div className="px-4 pb-4 bg-gray-50 border-t border-gray-100 cursor-default" onClick={e => e.stopPropagation()}>
+                          {/* 6. 顯示照片區域 */}
+                          {record.imageUrl && (
+                            <div className="mb-4">
+                              <p className="text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                                <ImageIcon size={16} /> 現場照片：
+                              </p>
+                              <a href={record.imageUrl} target="_blank" rel="noopener noreferrer" className="block w-full max-w-sm">
+                                <img src={record.imageUrl} alt="現場照片" className="rounded-lg border shadow-sm max-h-64 object-contain bg-gray-50 hover:opacity-95 transition" />
+                              </a>
+                            </div>
+                          )}
+
                           <div className="py-3 flex flex-wrap gap-y-2 gap-x-6 text-sm text-gray-600 border-b border-gray-200">
                              <div className="flex items-center gap-2"><MapPin size={16} className="text-gray-400" /> <span className="font-medium text-gray-700">地點：</span>{record.location || "未填寫"}</div>
                              <div className="flex items-center gap-2"><Phone size={16} className="text-gray-400" /> <span className="font-medium text-gray-700">聯絡：</span>{record.contactPerson} {record.contactPhone && `(${record.contactPhone})`}</div>
@@ -900,7 +1007,15 @@ export default function App() {
 
       {/* Create/Edit Modal */}
       <Modal isOpen={isFormOpen} onClose={() => setIsFormOpen(false)} title={editingRecord ? "編輯維修紀錄" : "新增維修紀錄"}>
-        <RecordForm formData={formData} setFormData={setFormData} handleSaveRecord={handleSaveRecord} setIsFormOpen={setIsFormOpen} />
+        <RecordForm 
+          formData={formData} 
+          setFormData={setFormData} 
+          handleSaveRecord={handleSaveRecord} 
+          setIsFormOpen={setIsFormOpen}
+          selectedFile={selectedFile}
+          setSelectedFile={setSelectedFile}
+          isUploading={isUploading}
+        />
       </Modal>
 
       {/* Analysis Modal */}
@@ -921,7 +1036,7 @@ export default function App() {
       </Modal>
 
       {/* Floating Action Button (Mobile) */}
-      <button onClick={() => { setEditingRecord(null); setFormData(initialFormState); setIsFormOpen(true); }} className="md:hidden fixed bottom-6 right-6 bg-blue-600 text-white p-4 rounded-full shadow-xl z-30 hover:bg-blue-700 transition"><Plus size={24} /></button>
+      <button onClick={() => { setEditingRecord(null); setFormData(initialFormState); setSelectedFile(null); setIsFormOpen(true); }} className="md:hidden fixed bottom-6 right-6 bg-blue-600 text-white p-4 rounded-full shadow-xl z-30 hover:bg-blue-700 transition"><Plus size={24} /></button>
     </div>
   );
 }
