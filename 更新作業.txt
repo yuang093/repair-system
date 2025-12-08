@@ -1,0 +1,23 @@
+更新網頁方式
+
+C:\repair-system> 目錄下執行
+
+git add .
+
+git commit -m "更新內容"
+
+git push
+
+
+
+常見問題排解
+出現 git: command not found？
+
+代表您電腦還沒安裝 Git。請去 Git 官網
+ 下載並安裝 (一直按 Next 即可)，安裝完重開CMD 即可。
+
+出現 Please tell me who you are？
+
+Git 需要知道是誰在存檔。請執行以下兩行指令設定您的身分：
+git config --global user.email "您的Email"
+git config --global user.name "您的名字"

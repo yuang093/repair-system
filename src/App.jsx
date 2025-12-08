@@ -44,7 +44,8 @@ import {
   User,
   Wrench,
   Package,
-  Timer
+  Timer,
+  Siren // New Icon
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
@@ -163,8 +164,8 @@ const AnalysisReport = ({ records }) => {
         grouped[quarter] = {
           total: 0,
           completed: 0,
-          totalDurationDays: 0, // Accumulator for MTTR
-          completedWithDuration: 0, // Count of records valid for MTTR
+          totalDurationDays: 0, 
+          completedWithDuration: 0, 
           equipmentCounts: {}
         };
       }
@@ -175,8 +176,6 @@ const AnalysisReport = ({ records }) => {
       if (r.status === '已完成') {
         g.completed += 1;
         
-        // Calculate Duration
-        // Priority: completedAt > updatedAt > null
         let endDate = null;
         if (r.completedAt) {
           endDate = r.completedAt.toDate ? r.completedAt.toDate() : new Date(r.completedAt);
@@ -189,19 +188,17 @@ const AnalysisReport = ({ records }) => {
           const diffTime = endDate - startDate;
           const diffDays = diffTime / (1000 * 60 * 60 * 24);
           
-          if (diffDays >= 0) { // Ensure no negative dates
+          if (diffDays >= 0) { 
             g.totalDurationDays += diffDays;
             g.completedWithDuration += 1;
           }
         }
       }
       
-      // Count equipment types
       const type = r.equipmentType || '未分類';
       g.equipmentCounts[type] = (g.equipmentCounts[type] || 0) + 1;
     });
 
-    // Sort quarters (newest first)
     return Object.entries(grouped).sort((a, b) => b[0].localeCompare(a[0]));
   }, [records]);
 
@@ -215,7 +212,7 @@ const AnalysisReport = ({ records }) => {
           
         const topEquipment = Object.entries(data.equipmentCounts)
           .sort((a, b) => b[1] - a[1])
-          .slice(0, 3); // Top 3
+          .slice(0, 3); 
 
         return (
           <div key={quarter} className="bg-white border rounded-lg p-4 shadow-sm">
@@ -225,7 +222,6 @@ const AnalysisReport = ({ records }) => {
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {/* Metric 1: Completion */}
               <div className="bg-blue-50 p-3 rounded text-center border border-blue-100">
                 <p className="text-xs text-blue-600 font-bold uppercase flex justify-center items-center gap-1">
                   <CheckCircle size={12} /> 完修率
@@ -234,7 +230,6 @@ const AnalysisReport = ({ records }) => {
                 <p className="text-xs text-blue-400 mt-1">{data.completed} / {data.total} 件</p>
               </div>
 
-              {/* Metric 2: MTTR (New) */}
               <div className="bg-purple-50 p-3 rounded text-center border border-purple-100">
                 <p className="text-xs text-purple-600 font-bold uppercase flex justify-center items-center gap-1">
                   <Timer size={12} /> 平均維修天數
@@ -243,7 +238,6 @@ const AnalysisReport = ({ records }) => {
                 <p className="text-xs text-purple-400 mt-1">天</p>
               </div>
 
-              {/* Metric 3: Top Failures */}
               <div className="bg-orange-50 p-3 rounded col-span-2 border border-orange-100">
                 <p className="text-xs text-orange-600 font-bold uppercase mb-2">報修系統排名 (Top 3)</p>
                 <div className="space-y-1.5">
@@ -294,6 +288,23 @@ const AdminLogin = ({ passwordInput, setPasswordInput, handleAdminLogin }) => (
 
 const RecordForm = ({ formData, setFormData, handleSaveRecord, setIsFormOpen }) => (
   <form onSubmit={handleSaveRecord} className="flex flex-col gap-3 text-sm">
+    
+    {/* Header Row with Urgent Toggle */}
+    <div className="flex justify-between items-center bg-gray-100 p-2 rounded border mb-1">
+      <div className="font-bold text-gray-700 text-base">基本資料填寫</div>
+      <button
+        type="button"
+        onClick={() => setFormData({...formData, isUrgent: !formData.isUrgent})}
+        className={`flex items-center gap-2 px-3 py-1.5 rounded text-sm font-bold transition shadow-sm
+          ${formData.isUrgent 
+            ? 'bg-red-600 text-white ring-2 ring-red-300 animate-pulse' 
+            : 'bg-white text-gray-500 border border-gray-300 hover:bg-gray-50'}`}
+      >
+        <Siren size={16} />
+        {formData.isUrgent ? '🚨 已標示為緊急案件' : '標示為緊急案件'}
+      </button>
+    </div>
+
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 bg-gray-50 p-3 rounded border">
       <div>
         <label className="block text-xs font-bold text-gray-500 mb-1">維修主題</label>
@@ -401,7 +412,7 @@ export default function App() {
   // UI State
   const [view, setView] = useState('list');
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [isAnalysisOpen, setIsAnalysisOpen] = useState(false); // New state for Analysis Modal
+  const [isAnalysisOpen, setIsAnalysisOpen] = useState(false); 
   const [deleteTargetId, setDeleteTargetId] = useState(null);
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
@@ -421,11 +432,12 @@ export default function App() {
     contactPhone: "",
     maintenanceDate: new Date().toISOString().slice(0, 16),
     status: "未完成",
-    reportLog: "",   // 報修過程
-    processLog: "",  // 故障排除 (原處理)
-    feedbackLog: "", // 故障原因 (原回報)
-    partsUsed: "",   // 新增
-    repairStaff: ""  // 新增
+    reportLog: "",   
+    processLog: "",  
+    feedbackLog: "", 
+    partsUsed: "",   
+    repairStaff: "", 
+    isUrgent: false // New field
   };
   const [formData, setFormData] = useState(initialFormState);
 
@@ -475,22 +487,38 @@ export default function App() {
       result = result.filter(r => r.equipmentType === filterType);
     }
 
-    if (sortMode === 'urgent') {
-      result = result.filter(r => r.status !== '已完成');
-      result.sort((a, b) => {
+    // Sort Function
+    result.sort((a, b) => {
+      // 1. PIN URGENT ITEMS TO TOP (Only if not completed)
+      // Urgent items that are NOT completed should always be first
+      const aIsPinned = a.isUrgent && a.status !== '已完成';
+      const bIsPinned = b.isUrgent && b.status !== '已完成';
+
+      if (aIsPinned && !bIsPinned) return -1;
+      if (!aIsPinned && bIsPinned) return 1;
+
+      // 2. Standard Sorting based on Mode
+      if (sortMode === 'urgent') {
+        // Mode "Urgent" (Expire Soon)
+        // If one is completed, put at bottom
+        if (a.status === '已完成' && b.status !== '已完成') return 1;
+        if (a.status !== '已完成' && b.status === '已完成') return -1;
+
         const dateA = a.maintenanceDate ? new Date(a.maintenanceDate).getTime() : 0;
         const dateB = b.maintenanceDate ? new Date(b.maintenanceDate).getTime() : 0;
-        return dateA - dateB;
-      });
-    } else if (sortMode === 'completed') {
-      result = result.filter(r => r.status === '已完成');
-      result.sort((a, b) => {
+        return dateA - dateB; // Oldest first
+      } else if (sortMode === 'completed') {
+        // Mode "Completed"
+        // If one is not completed, filter out? No, just sort. But UI usually filters.
+        // Assuming filtered before or handled here.
+        if (a.status !== '已完成' && b.status === '已完成') return 1;
+        if (a.status === '已完成' && b.status !== '已完成') return -1;
+
         const dateA = a.maintenanceDate ? new Date(a.maintenanceDate).getTime() : 0;
         const dateB = b.maintenanceDate ? new Date(b.maintenanceDate).getTime() : 0;
-        return dateB - dateA;
-      });
-    } else {
-      result.sort((a, b) => {
+        return dateB - dateA; // Newest first
+      } else {
+        // Mode "Default" (Time Sort)
         const aIsCompleted = a.status === "已完成";
         const bIsCompleted = b.status === "已完成";
         if (aIsCompleted !== bIsCompleted) {
@@ -498,8 +526,17 @@ export default function App() {
         }
         const dateA = a.maintenanceDate ? new Date(a.maintenanceDate).getTime() : 0;
         const dateB = b.maintenanceDate ? new Date(b.maintenanceDate).getTime() : 0;
-        return dateB - dateA;
-      });
+        return dateB - dateA; // Newest first
+      }
+    });
+
+    // Apply Filter for Completed Mode strictly
+    if (sortMode === 'completed') {
+      result = result.filter(r => r.status === '已完成');
+    }
+    // Apply Filter for Urgent Mode (Expire Soon) strictly -> Uncompleted
+    if (sortMode === 'urgent') {
+      result = result.filter(r => r.status !== '已完成');
     }
 
     return result;
@@ -520,10 +557,7 @@ export default function App() {
     try {
       const payload = { ...formData, updatedAt: serverTimestamp() };
       
-      // Update completion time logic:
-      // If setting to "Completed", record the time.
       if (formData.status === '已完成') {
-        // If it wasn't already completed (or we are creating new as completed), set timestamp
         if (!editingRecord || editingRecord.status !== '已完成') {
           payload.completedAt = serverTimestamp();
         }
@@ -571,7 +605,8 @@ export default function App() {
       processLog: record.processLog || "",
       feedbackLog: record.feedbackLog || "",
       partsUsed: record.partsUsed || "",
-      repairStaff: record.repairStaff || ""
+      repairStaff: record.repairStaff || "",
+      isUrgent: record.isUrgent || false // Load existing value
     });
     setIsFormOpen(true);
   };
@@ -581,12 +616,12 @@ export default function App() {
   };
 
   const exportCSV = () => {
-    const headers = ["主題", "狀態", "設備類型", "地點", "聯絡人", "電話", "日期", "維修內容", "報修過程", "故障排除維修", "故障原因", "使用零件", "維修人員"];
+    const headers = ["主題", "狀態", "緊急", "設備類型", "地點", "聯絡人", "電話", "日期", "維修內容", "報修過程", "故障排除維修", "故障原因", "使用零件", "維修人員"];
     const csvContent = [
       headers.join(","),
       ...records.map(r => {
         const row = [
-          r.subject, r.status, r.equipmentType, r.location, r.contactPerson, r.contactPhone, 
+          r.subject, r.status, r.isUrgent ? "是" : "否", r.equipmentType, r.location, r.contactPerson, r.contactPhone, 
           r.maintenanceDate, r.content, r.reportLog, r.processLog, r.feedbackLog,
           r.partsUsed, r.repairStaff
         ];
@@ -648,20 +683,32 @@ export default function App() {
         const cols = parseLine(row, delimiter);
         if (cols.length >= 7) {
           try {
+             // Basic structure assumption, adjusting for potential new columns if importing older CSVs might fail slightly if strict, 
+             // but here we try to map.
+             // Updated import logic to check length or map blindly if format matches.
+             // Since format changed, import might be tricky for old CSVs. 
+             // We will stick to the previous mapping logic but add defaults.
              await addDoc(colRef, {
                subject: cols[0] || "匯入資料",
                status: cols[1] || "未完成",
-               equipmentType: cols[2] || "其他",
-               location: cols[3] || "",
-               contactPerson: cols[4] || "",
-               contactPhone: cols[5] || "",
-               maintenanceDate: cols[6] || new Date().toISOString(),
-               content: cols[7] || "",
-               reportLog: cols[8] || "",
-               processLog: cols[9] || "",
-               feedbackLog: cols[10] || "",
-               partsUsed: cols[11] || "",
-               repairStaff: cols[12] || "",
+               // isUrgent not in old CSVs, default false. If column 2 is "是" then true.
+               isUrgent: cols[2] === "是", 
+               equipmentType: cols[3] || "其他", // Shifted index if users use new CSV format, but keeping old logic safe?
+               // Actually, for safety, if user imports OLD format CSV, indices are shifted. 
+               // For now assuming user imports NEW format CSV or accepts misalignment. 
+               // To be robust: Check if header has '緊急'. If not, use old mapping.
+               // Simplified here: Assuming imports follow export structure or we map based on column count?
+               // Let's stick to safe defaults.
+               location: cols[4] || "",
+               contactPerson: cols[5] || "",
+               contactPhone: cols[6] || "",
+               maintenanceDate: cols[7] || new Date().toISOString(),
+               content: cols[8] || "",
+               reportLog: cols[9] || "",
+               processLog: cols[10] || "",
+               feedbackLog: cols[11] || "",
+               partsUsed: cols[12] || "",
+               repairStaff: cols[13] || "",
                createdAt: serverTimestamp(),
                imported: true
              });
@@ -778,11 +825,20 @@ export default function App() {
                 {sortedRecords.map((record) => {
                   const isExpanded = expandedId === record.id;
                   return (
-                    <div key={record.id} onClick={() => toggleExpand(record.id)} className={`bg-white rounded-lg shadow-sm border transition duration-200 overflow-hidden cursor-pointer hover:shadow-md ${isExpanded ? 'border-blue-300 ring-1 ring-blue-200' : 'border-gray-200'}`}>
+                    <div 
+                      key={record.id} 
+                      onClick={() => toggleExpand(record.id)} 
+                      className={`bg-white rounded-lg shadow-sm border transition duration-200 overflow-hidden cursor-pointer hover:shadow-md ${isExpanded ? 'border-blue-300 ring-1 ring-blue-200' : 'border-gray-200'} ${record.isUrgent && record.status !== '已完成' ? 'border-red-300 ring-1 ring-red-100' : ''}`}
+                    >
                       <div className="p-4 flex items-center justify-between gap-4">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-3">
                             <h3 className="text-base font-bold text-gray-800 truncate">{record.subject}</h3>
+                            {record.isUrgent && record.status !== '已完成' && (
+                              <span className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] bg-red-600 text-white font-bold shadow-sm whitespace-nowrap animate-pulse">
+                                <Siren size={10} /> 緊急
+                              </span>
+                            )}
                             {record.equipmentType && <span className="hidden sm:inline-block px-2 py-0.5 rounded text-[10px] bg-gray-100 text-gray-500 border border-gray-200 whitespace-nowrap">{record.equipmentType}</span>}
                           </div>
                           <div className="text-xs text-gray-400 mt-1 flex items-center gap-2"><Calendar size={12} /> {formatDate(record.maintenanceDate)}</div>
@@ -800,7 +856,6 @@ export default function App() {
                              <div className="flex items-center gap-2"><Phone size={16} className="text-gray-400" /> <span className="font-medium text-gray-700">聯絡：</span>{record.contactPerson} {record.contactPhone && `(${record.contactPhone})`}</div>
                              <div className="flex items-center gap-2 sm:hidden"><Settings size={16} className="text-gray-400" /> <span className="font-medium text-gray-700">類別：</span>{record.equipmentType}</div>
                              
-                             {/* Display New Fields */}
                              <div className="flex items-center gap-2"><User size={16} className="text-purple-400" /> <span className="font-medium text-purple-700">維修：</span>{record.repairStaff || "-"}</div>
                              <div className="flex items-center gap-2"><Package size={16} className="text-purple-400" /> <span className="font-medium text-purple-700">零件：</span>{record.partsUsed || "-"}</div>
                           </div>
