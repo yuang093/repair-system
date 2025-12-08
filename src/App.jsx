@@ -36,11 +36,13 @@ import {
   FileText,
   Filter,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  AlertTriangle,
+  List,
+  CheckSquare
 } from 'lucide-react';
 
 // --- Firebase Configuration ---
-// 您提供的設定檔
 const firebaseConfig = {
   apiKey: "AIzaSyD4lGldiZHjV_Pybir3642ua-elHjY7-KA",
   authDomain: "repair-system-effc6.firebaseapp.com",
@@ -50,12 +52,12 @@ const firebaseConfig = {
   appId: "1:909879213352:web:edcc536b1ce7699fe5241d"
 };
 
-// --- Initialization (關鍵修正：確保 auth, db, appId 都有定義) ---
+// --- Initialization ---
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 
-// 定義 appId 用於資料庫路徑 (請勿刪除此行)
+// 定義 appId 用於資料庫路徑
 const appId = 'repair-system-v1';
 
 // --- Constants & Options ---
@@ -153,11 +155,8 @@ const AdminLogin = ({ passwordInput, setPasswordInput, handleAdminLogin }) => (
   </div>
 );
 
-// Compact Form Layout
 const RecordForm = ({ formData, setFormData, handleSaveRecord, setIsFormOpen }) => (
   <form onSubmit={handleSaveRecord} className="flex flex-col gap-3 text-sm">
-    
-    {/* Row 1: Basic Info - Compact Grid */}
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3 bg-gray-50 p-3 rounded border">
       <div>
         <label className="block text-xs font-bold text-gray-500 mb-1">維修主題</label>
@@ -185,7 +184,6 @@ const RecordForm = ({ formData, setFormData, handleSaveRecord, setIsFormOpen }) 
       </div>
     </div>
 
-    {/* Row 2: Location & Contact - Compact Grid */}
     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
       <div className="relative">
         <MapPin size={14} className="absolute left-2 top-2.5 text-gray-400" />
@@ -204,7 +202,6 @@ const RecordForm = ({ formData, setFormData, handleSaveRecord, setIsFormOpen }) 
       </div>
     </div>
 
-    {/* Row 3: Content */}
     <div>
       <textarea 
         placeholder="維修內容簡述..." 
@@ -214,7 +211,6 @@ const RecordForm = ({ formData, setFormData, handleSaveRecord, setIsFormOpen }) 
       />
     </div>
 
-    {/* Row 4: Detailed Logs - Side by Side */}
     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 bg-blue-50 p-3 rounded border border-blue-100">
       <div>
         <label className="block text-xs font-bold text-blue-800 mb-1">報修過程</label>
@@ -236,7 +232,6 @@ const RecordForm = ({ formData, setFormData, handleSaveRecord, setIsFormOpen }) 
       </div>
     </div>
 
-    {/* Footer */}
     <div className="flex justify-end gap-3 mt-1 pt-3 border-t">
       <button type="button" onClick={() => setIsFormOpen(false)} className="px-4 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded">取消</button>
       <button type="submit" className="px-6 py-1.5 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 flex items-center gap-2">
@@ -247,7 +242,6 @@ const RecordForm = ({ formData, setFormData, handleSaveRecord, setIsFormOpen }) 
 );
 
 // --- Main App Component ---
-// 將名稱改為 App 以符合預設匯出
 export default function App() {
   const [user, setUser] = useState(null);
   const [records, setRecords] = useState([]);
@@ -263,10 +257,11 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState("All");
   
-  // New State for List Expansion
+  // New State for Sorting Mode: 'default', 'urgent', 'completed'
+  const [sortMode, setSortMode] = useState('default');
+  
   const [expandedId, setExpandedId] = useState(null);
 
-  // Form State
   const initialFormState = {
     subject: "",
     equipmentType: EQUIPMENT_TYPES[0],
@@ -282,10 +277,8 @@ export default function App() {
   };
   const [formData, setFormData] = useState(initialFormState);
 
-  // --- Auth & Data Loading ---
   useEffect(() => {
     const initAuth = async () => {
-      // 這裡直接使用上方已經初始化好的 auth
       await signInAnonymously(auth);
     };
     initAuth();
@@ -316,6 +309,8 @@ export default function App() {
   // --- Logic: Sorting & Filtering ---
   const sortedRecords = useMemo(() => {
     let result = [...records];
+    
+    // 1. Text Filter (Search)
     if (searchTerm) {
       const lowerTerm = searchTerm.toLowerCase();
       result = result.filter(r => 
@@ -324,23 +319,51 @@ export default function App() {
         r.contactPerson?.toLowerCase().includes(lowerTerm)
       );
     }
+    
+    // 2. Equipment Type Filter
     if (filterType !== "All") {
       result = result.filter(r => r.equipmentType === filterType);
     }
-    result.sort((a, b) => {
-      const aIsCompleted = a.status === "已完成";
-      const bIsCompleted = b.status === "已完成";
-      if (aIsCompleted === bIsCompleted) {
+
+    // 3. Sort Mode Logic
+    if (sortMode === 'urgent') {
+      // 緊急：只顯示「未完成」，依照時間「舊到新」（越舊代表離90天到期越近）
+      result = result.filter(r => r.status !== '已完成');
+      result.sort((a, b) => {
+        const dateA = a.maintenanceDate ? new Date(a.maintenanceDate).getTime() : 0;
+        const dateB = b.maintenanceDate ? new Date(b.maintenanceDate).getTime() : 0;
+        return dateA - dateB; // Ascending: Oldest first
+      });
+    } else if (sortMode === 'completed') {
+      // 已完成：只顯示「已完成」，依照時間「新到舊」
+      result = result.filter(r => r.status === '已完成');
+      result.sort((a, b) => {
+        const dateA = a.maintenanceDate ? new Date(a.maintenanceDate).getTime() : 0;
+        const dateB = b.maintenanceDate ? new Date(b.maintenanceDate).getTime() : 0;
+        return dateB - dateA; // Descending: Newest first
+      });
+    } else {
+      // 預設 (Default)：全部顯示
+      // 邏輯：未完成在最上面 (依照時間新到舊)，已完成在最下面 (依照時間新到舊)
+      result.sort((a, b) => {
+        const aIsCompleted = a.status === "已完成";
+        const bIsCompleted = b.status === "已完成";
+        
+        // If one is completed and other is not, put incomplete first
+        if (aIsCompleted !== bIsCompleted) {
+          return aIsCompleted ? 1 : -1;
+        }
+
+        // Same completion status, sort by date descending (Newest first)
         const dateA = a.maintenanceDate ? new Date(a.maintenanceDate).getTime() : 0;
         const dateB = b.maintenanceDate ? new Date(b.maintenanceDate).getTime() : 0;
         return dateB - dateA;
-      }
-      return aIsCompleted ? 1 : -1;
-    });
-    return result;
-  }, [records, searchTerm, filterType]);
+      });
+    }
 
-  // --- Actions ---
+    return result;
+  }, [records, searchTerm, filterType, sortMode]);
+
   const handleAdminLogin = () => {
     if (passwordInput === ADMIN_PASSWORD) {
       setIsAdminLoggedIn(true);
@@ -426,12 +449,10 @@ export default function App() {
     const file = event.target.files[0];
     if (!file) return;
 
-    // Use FileReader with ArrayBuffer to support decoding text encoding
     const reader = new FileReader();
     reader.onload = async (e) => {
       const buffer = e.target.result;
       
-      // Robust decoding logic: Try UTF-8 first, fallback to Big5
       let text = '';
       const utf8Decoder = new TextDecoder('utf-8', { fatal: true });
       const big5Decoder = new TextDecoder('big5');
@@ -439,7 +460,6 @@ export default function App() {
       try {
         text = utf8Decoder.decode(buffer);
       } catch (err) {
-        // If UTF-8 fails (likely due to invalid byte sequences), try Big5
         console.log("UTF-8 decoding failed, trying Big5...");
         try {
           text = big5Decoder.decode(buffer);
@@ -449,25 +469,18 @@ export default function App() {
         }
       }
 
-      // Handle various line endings and header detection
       const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
-      
-      // Auto-detect delimiter based on the header line
       const firstLine = lines[0] || '';
       const delimiter = firstLine.indexOf('\t') !== -1 ? '\t' : ',';
-      
-      // Remove header row
       const rows = lines.slice(1);
       
       let count = 0;
       const colRef = collection(db, 'artifacts', appId, 'public', 'data', 'maintenance_records');
 
-      // Helper for robust parsing including quotes
       const parseLine = (line, sep) => {
         const result = [];
         let current = '';
         let inQuote = false;
-        
         for (let i = 0; i < line.length; i++) {
           const char = line[i];
           if (char === '"') {
@@ -490,10 +503,7 @@ export default function App() {
 
       for (const row of rows) {
         if (!row.trim()) continue;
-        
-        // Parse the row
         const cols = parseLine(row, delimiter);
-        
         if (cols.length >= 7) {
           try {
              await addDoc(colRef, {
@@ -518,10 +528,8 @@ export default function App() {
         }
       }
       alert(`成功匯入 ${count} 筆資料`);
-      event.target.value = ''; // Reset input
+      event.target.value = '';
     };
-    
-    // Read as ArrayBuffer to allow TextDecoder to work
     reader.readAsArrayBuffer(file);
   };
 
@@ -562,24 +570,67 @@ export default function App() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 py-6">
         
-        {/* Filters */}
-        <div className="mb-6 bg-white p-4 rounded-lg shadow-sm border border-gray-200 flex flex-col md:flex-row gap-4 justify-between items-center">
-          <div className="flex items-center gap-2 w-full md:w-auto">
-            <Search className="text-gray-400" size={20} />
-            <input 
-              type="text" 
-              placeholder="搜尋主題、地點、聯絡人..." 
-              className="pl-2 pr-4 py-2 border rounded w-full md:w-64 focus:ring-2 focus:ring-blue-500 outline-none"
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-            />
+        {/* Filters and Sorting Buttons */}
+        <div className="mb-6 space-y-3">
+          {/* Top Row: Sorting Buttons */}
+          <div className="flex flex-wrap gap-2">
+            
+            {/* 1. Default (Time Sort) - Left */}
+            <button 
+              onClick={() => setSortMode('default')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm
+                ${sortMode === 'default' 
+                  ? 'bg-blue-600 text-white ring-2 ring-blue-300' 
+                  : 'bg-white text-gray-700 hover:bg-blue-50 border border-gray-200'}`}
+            >
+              <List size={16} className={sortMode === 'default' ? 'text-white' : 'text-blue-500'} />
+              時間排序
+            </button>
+
+            {/* 2. Urgent - Middle */}
+            <button 
+              onClick={() => setSortMode('urgent')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm
+                ${sortMode === 'urgent' 
+                  ? 'bg-red-600 text-white ring-2 ring-red-300' 
+                  : 'bg-white text-gray-700 hover:bg-red-50 border border-gray-200'}`}
+            >
+              <AlertTriangle size={16} className={sortMode === 'urgent' ? 'text-white' : 'text-red-500'} />
+              緊急
+            </button>
+            
+            {/* 3. Completed - Right */}
+            <button 
+              onClick={() => setSortMode('completed')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition shadow-sm
+                ${sortMode === 'completed' 
+                  ? 'bg-green-600 text-white ring-2 ring-green-300' 
+                  : 'bg-white text-gray-700 hover:bg-green-50 border border-gray-200'}`}
+            >
+              <CheckSquare size={16} className={sortMode === 'completed' ? 'text-white' : 'text-green-500'} />
+              已完成
+            </button>
           </div>
-          <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto">
-            <Filter size={20} className="text-gray-500" />
-            <select className="border p-2 rounded text-sm" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
-              <option value="All">所有設備類型</option>
-              {EQUIPMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
+
+          {/* Bottom Row: Search & Type Filter */}
+          <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-200 flex flex-col md:flex-row gap-4 justify-between items-center">
+            <div className="flex items-center gap-2 w-full md:w-auto">
+              <Search className="text-gray-400" size={20} />
+              <input 
+                type="text" 
+                placeholder="搜尋主題、地點、聯絡人..." 
+                className="pl-2 pr-4 py-2 border rounded w-full md:w-64 focus:ring-2 focus:ring-blue-500 outline-none"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto">
+              <Filter size={20} className="text-gray-500" />
+              <select className="border p-2 rounded text-sm" value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+                <option value="All">所有設備類型</option>
+                {EQUIPMENT_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+              </select>
+            </div>
           </div>
         </div>
 
@@ -611,8 +662,10 @@ export default function App() {
               <div className="text-center py-10 text-gray-500">載入中...</div>
             ) : sortedRecords.length === 0 ? (
               <div className="text-center py-10 bg-white rounded shadow-sm border border-dashed border-gray-300">
-                <p className="text-gray-500">目前沒有維修紀錄</p>
-                <button onClick={() => setIsFormOpen(true)} className="mt-2 text-blue-600 font-semibold hover:underline">立即新增一筆</button>
+                <p className="text-gray-500">目前沒有符合條件的維修紀錄</p>
+                {sortMode !== 'completed' && (
+                  <button onClick={() => setIsFormOpen(true)} className="mt-2 text-blue-600 font-semibold hover:underline">立即新增一筆</button>
+                )}
               </div>
             ) : (
               <div className="grid gap-3">
