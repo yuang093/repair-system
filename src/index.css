@@ -1,0 +1,25 @@
+/* 這裡不需要放 HTML 標籤 */
+/* 如果您使用 Tailwind CSS 的 CDN 方式，這裡留空即可 */
+/* 因為我們已經在 index.html 加入了 CDN，這裡不需要再做任何設定 */
+
+:root {
+  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  
+  /* 移除原本的深色模式設定 */
+  color-scheme: light;
+  color: #213547;
+  background-color: #ffffff;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
