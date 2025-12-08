@@ -93,7 +93,14 @@ const StatusBadge = ({ status, startDate }) => {
   
   if (status === "已完成") {
     colorClass = "bg-green-100 text-green-800";
+  } else if (status === "待料中") {
+    // Light Yellow for Waiting
+    colorClass = "bg-yellow-100 text-yellow-800";
+  } else if (status === "處理中") {
+    // Light Orange for In Progress
+    colorClass = "bg-orange-100 text-orange-800";
   } else {
+    // Default logic for "未完成" (Time-based)
     if (daysLeft < 0) colorClass = "bg-red-100 text-red-800";
     else if (daysLeft < 30) colorClass = "bg-orange-100 text-orange-800";
     else colorClass = "bg-blue-100 text-blue-800";
