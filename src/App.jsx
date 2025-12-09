@@ -129,28 +129,28 @@ const generateWordDocument = async (record) => {
 
   /* --- 請在本地端解除以下區塊的註解 (Uncomment below in local env) ---
   try {
-    // 1. Load the template file from the public folder
+     1. Load the template file from the public folder
     const response = await fetch('/fix.docx');
     if (!response.ok) {
       throw new Error('找不到樣板檔 (public/fix.docx)');
     }
     const content = await response.arrayBuffer();
 
-    // 2. Unzip the content
+     2. Unzip the content
     const zip = new PizZip(content);
 
-    // 3. Parse the template
+     3. Parse the template
     const doc = new Docxtemplater(zip, {
       paragraphLoop: true,
       linebreaks: true,
     });
 
-    // 4. Prepare data
+     4. Prepare data
     const dateStr = record.maintenanceDate 
       ? new Date(record.maintenanceDate).toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })
       : '';
 
-    // 5. Render the document (replace {placeholders} with data)
+     5. Render the document (replace {placeholders} with data)
     doc.render({
       subject: record.subject || '',
       status: record.status || '',
@@ -165,13 +165,13 @@ const generateWordDocument = async (record) => {
       repairStaff: record.repairStaff || '',
     });
 
-    // 6. Generate the output blob
+     6. Generate the output blob
     const out = doc.getZip().generate({
       type: 'blob',
       mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     });
 
-    // 7. Save the file
+     7. Save the file
     saveAs(out, `${record.subject}_維修報告書.docx`);
 
   } catch (error) {
