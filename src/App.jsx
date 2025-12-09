@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+// 1. Firebase 核心功能引入 (這裡保留一份即可)
 import { initializeApp } from 'firebase/app';
 import { 
   getAuth, 
@@ -49,17 +50,14 @@ import {
   Camera,
   Image as ImageIcon,
   Loader2,
-  FileDown // New Icon for Word Download
+  FileDown 
 } from 'lucide-react';
 
-// --- Imports for Word Generation ---
-// 【重要說明】：為了讓線上預覽正常運作，以下三行必須先註解起來。
-// 當您下載到自己電腦執行時，請將這三行「解除註解」 (拿掉前面的 //)。
-// 並確認終端機已執行過： npm install docxtemplater pizzip file-saver
-
-  import PizZip from 'pizzip';
-  import Docxtemplater from 'docxtemplater';
-  import { saveAs } from 'file-saver';
+// --- [重要] Word 下載功能套件 ---
+// 在您的電腦上，請將下面這三行的註解符號 (//) 刪除，功能才能運作！
+ import PizZip from 'pizzip';
+ import Docxtemplater from 'docxtemplater';
+ import { saveAs } from 'file-saver';
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -117,34 +115,27 @@ const getQuarter = (dateObj) => {
 
 // --- Word Document Generation Helper ---
 const generateWordDocument = async (record) => {
-  // 【本地端設定】：請將下方的 alert 刪除，並將區塊內的程式碼解除註解
+  // 在您的電腦上，請將下方的 alert 刪除，並將區塊註解 (/* ... */) 解除
   
   
 
-  /* --- 請在本地端解除以下區塊的註解 (Uncomment below in local env) ---
+  /* [請解除以下區塊註解]
   try {
-     1. Load the template file from the public folder
     const response = await fetch('/fix.docx');
     if (!response.ok) {
       throw new Error('找不到樣板檔 (public/fix.docx)');
     }
     const content = await response.arrayBuffer();
-
-     2. Unzip the content
     const zip = new PizZip(content);
-
-     3. Parse the template
     const doc = new Docxtemplater(zip, {
       paragraphLoop: true,
       linebreaks: true,
     });
 
-     4. Prepare data
     const dateStr = record.maintenanceDate 
       ? new Date(record.maintenanceDate).toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })
       : '';
 
-     5. Render the document (replace {placeholders} with data)
     doc.render({
       subject: record.subject || '',
       status: record.status || '',
@@ -153,26 +144,24 @@ const generateWordDocument = async (record) => {
       date: dateStr,
       content: record.content || '',
       reportLog: record.reportLog || '',
-      processLog: record.processLog || '', // 對應「備註」/「故障排除」
-      feedbackLog: record.feedbackLog || '', // 對應「故障原因」
+      processLog: record.processLog || '', 
+      feedbackLog: record.feedbackLog || '', 
       partsUsed: record.partsUsed || '',
       repairStaff: record.repairStaff || '',
     });
 
-     6. Generate the output blob
     const out = doc.getZip().generate({
       type: 'blob',
       mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     });
 
-     7. Save the file
     saveAs(out, `${record.subject}_維修報告書.docx`);
 
   } catch (error) {
     console.error("Generate Word Error:", error);
-    alert(`產生 Word 檔失敗: ${error.message}\n請確認 fix.docx 是否已放入 public 資料夾，並已安裝必要套件。`);
+    alert(`產生 Word 檔失敗: ${error.message}`);
   }
-  --- 結束解除註解區塊 --- */
+  [解除註解至此] */
 };
 
 // --- Image Compression Helper ---
@@ -207,7 +196,6 @@ const compressImage = (file) => {
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
         
-        // 壓縮成 JPEG, 品質 0.6 (約縮小到 50-100KB)
         const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
         resolve(dataUrl);
       };
@@ -230,7 +218,6 @@ const StatusBadge = ({ status, startDate }) => {
   } else if (status === "處理中") {
     colorClass = "bg-purple-100 text-purple-800";
   } else {
-    // Default logic for "未完成" (Time-based)
     if (daysLeft < 0) colorClass = "bg-red-100 text-red-800";
     else if (daysLeft < 30) colorClass = "bg-orange-100 text-orange-800";
     else colorClass = "bg-blue-100 text-blue-800";
@@ -1007,7 +994,7 @@ export default function App() {
                           <div className="text-xs text-gray-400 mt-1 flex items-center gap-2"><Calendar size={12} /> {formatDate(record.maintenanceDate)}</div>
                         </div>
                         <div className="flex items-center gap-3 shrink-0">
-                          {/* 下載按鈕 */}
+                          {/* 下載按鈕 - 修正：傳入 record */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation(); // 阻止展開
