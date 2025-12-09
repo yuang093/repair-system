@@ -17,7 +17,6 @@ import {
   serverTimestamp,
   Timestamp
 } from 'firebase/firestore';
-// 移除 Storage 引用，因為我們改用 Base64
 import { 
   Plus, 
   Search, 
@@ -49,8 +48,17 @@ import {
   Siren,
   Camera,
   Image as ImageIcon,
-  Loader2
+  Loader2,
+  FileDown // New Icon for Word Download
 } from 'lucide-react';
+
+// --- Imports for Word Generation ---
+// 注意：為了讓預覽畫面能正常運作，這邊先暫時註解掉第三方套件
+// 請在您的本地端執行： npm install docxtemplater pizzip file-saver
+// 然後將下面三行解除註解 (Uncomment)
+// import PizZip from 'pizzip';
+// import Docxtemplater from 'docxtemplater';
+// import { saveAs } from 'file-saver';
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -66,7 +74,6 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-// const storage = getStorage(app); // 不再需要 Storage
 
 // 定義 appId 用於資料庫路徑
 const appId = 'repair-system-v1';
@@ -107,7 +114,73 @@ const getQuarter = (dateObj) => {
   return `${year} Q4`;
 };
 
-// --- Image Compression Helper (New) ---
+// --- Word Document Generation Helper ---
+const generateWordDocument = async (record) => {
+  // 注意：以下程式碼需要安裝套件才能運作。
+  // 為了防止預覽崩潰，這裡使用 alert 提示。
+  // 請在本地端將下方的程式碼解除註解，並刪除 alert。
+  
+  alert(
+    "【提示】Word 下載功能需要第三方套件支援。\n\n" +
+    "請在您的專案資料夾執行以下指令安裝：\n" +
+    "npm install docxtemplater pizzip file-saver\n\n" +
+    "安裝後，請打開程式碼 (App.jsx)，將 `generateWordDocument` 內的註解程式碼還原即可。"
+  );
+
+  /* --- 請在本地端解除以下註解 (Uncomment below in local env) ---
+  try {
+    // 1. Load the template file from the public folder
+    const response = await fetch('/fix.docx');
+    if (!response.ok) {
+      throw new Error('找不到樣板檔 (public/fix.docx)');
+    }
+    const content = await response.arrayBuffer();
+
+    // 2. Unzip the content
+    const zip = new PizZip(content);
+
+    // 3. Parse the template
+    const doc = new Docxtemplater(zip, {
+      paragraphLoop: true,
+      linebreaks: true,
+    });
+
+    // 4. Prepare data
+    const dateStr = record.maintenanceDate 
+      ? new Date(record.maintenanceDate).toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })
+      : '';
+
+    // 5. Render the document (replace {placeholders} with data)
+    doc.render({
+      subject: record.subject || '',
+      status: record.status || '',
+      location: record.location || '',
+      contactPerson: record.contactPerson || '',
+      date: dateStr,
+      content: record.content || '',
+      reportLog: record.reportLog || '',
+      processLog: record.processLog || '', // 對應「備註」/「故障排除」
+      partsUsed: record.partsUsed || '',
+      repairStaff: record.repairStaff || '',
+    });
+
+    // 6. Generate the output blob
+    const out = doc.getZip().generate({
+      type: 'blob',
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+
+    // 7. Save the file
+    saveAs(out, `${record.subject}_維修報告書.docx`);
+
+  } catch (error) {
+    console.error("Generate Word Error:", error);
+    alert(`產生 Word 檔失敗: ${error.message}\n請確認 fix.docx 是否已放入 public 資料夾，並已安裝必要套件。`);
+  }
+  --- 結束解除註解區塊 --- */
+};
+
+// --- Image Compression Helper ---
 const compressImage = (file) => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -939,6 +1012,18 @@ export default function App() {
                           <div className="text-xs text-gray-400 mt-1 flex items-center gap-2"><Calendar size={12} /> {formatDate(record.maintenanceDate)}</div>
                         </div>
                         <div className="flex items-center gap-3 shrink-0">
+                          {/* 下載按鈕 */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation(); // 阻止展開
+                              generateWordDocument(record);
+                            }}
+                            className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded transition flex items-center gap-1"
+                            title="下載 Word 維修單"
+                          >
+                            <FileDown size={18} />
+                          </button>
+                          
                           <StatusBadge status={record.status} startDate={record.maintenanceDate} />
                           {isExpanded ? <ChevronUp size={20} className="text-gray-400" /> : <ChevronDown size={20} className="text-gray-400" />}
                         </div>
