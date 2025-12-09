@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-// 1. Firebase 核心功能引入 (這裡保留一份即可)
+// 1. Firebase 核心功能引入
 import { initializeApp } from 'firebase/app';
 import { 
   getAuth, 
@@ -53,11 +53,10 @@ import {
   FileDown 
 } from 'lucide-react';
 
-// --- [重要] Word 下載功能套件 ---
-// 在您的電腦上，請將下面這三行的註解符號 (//) 刪除，功能才能運作！
- import PizZip from 'pizzip';
- import Docxtemplater from 'docxtemplater';
- import { saveAs } from 'file-saver';
+// --- [已啟用] Word 下載功能套件 ---
+import PizZip from 'pizzip';
+import Docxtemplater from 'docxtemplater';
+import { saveAs } from 'file-saver';
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -115,27 +114,29 @@ const getQuarter = (dateObj) => {
 
 // --- Word Document Generation Helper ---
 const generateWordDocument = async (record) => {
-  // 在您的電腦上，請將下方的 alert 刪除，並將區塊註解 (/* ... */) 解除
-  
-  
-
-  /* [請解除以下區塊註解]
   try {
+    // 1. 讀取 public 資料夾中的樣板檔
     const response = await fetch('/fix.docx');
     if (!response.ok) {
-      throw new Error('找不到樣板檔 (public/fix.docx)');
+      throw new Error('找不到樣板檔 (public/fix.docx)，請確認檔案是否存在。');
     }
     const content = await response.arrayBuffer();
+
+    // 2. 解壓縮內容
     const zip = new PizZip(content);
+
+    // 3. 解析樣板
     const doc = new Docxtemplater(zip, {
       paragraphLoop: true,
       linebreaks: true,
     });
 
+    // 4. 準備資料
     const dateStr = record.maintenanceDate 
       ? new Date(record.maintenanceDate).toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })
       : '';
 
+    // 5. 渲染文件 (將資料填入 {變數} 中)
     doc.render({
       subject: record.subject || '',
       status: record.status || '',
@@ -150,18 +151,19 @@ const generateWordDocument = async (record) => {
       repairStaff: record.repairStaff || '',
     });
 
+    // 6. 產生 Blob
     const out = doc.getZip().generate({
       type: 'blob',
       mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     });
 
+    // 7. 下載檔案
     saveAs(out, `${record.subject}_維修報告書.docx`);
 
   } catch (error) {
     console.error("Generate Word Error:", error);
     alert(`產生 Word 檔失敗: ${error.message}`);
   }
-  [解除註解至此] */
 };
 
 // --- Image Compression Helper ---
