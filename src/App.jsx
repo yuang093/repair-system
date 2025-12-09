@@ -119,13 +119,7 @@ const getQuarter = (dateObj) => {
 const generateWordDocument = async (record) => {
   // 【本地端設定】：請將下方的 alert 刪除，並將區塊內的程式碼解除註解
   
-  alert(
-    "【提示】Word 下載功能在此預覽環境無法執行，因為缺少第三方套件。\n\n" +
-    "請在您的電腦上執行以下步驟：\n" +
-    "1. 終端機執行：npm install docxtemplater pizzip file-saver\n" +
-    "2. 在 App.jsx 最上方解除 import 的註解\n" +
-    "3. 在 generateWordDocument 函式中解除邏輯程式碼的註解"
-  );
+  
 
   /* --- 請在本地端解除以下區塊的註解 (Uncomment below in local env) ---
   try {
