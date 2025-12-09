@@ -50,7 +50,8 @@ import {
   Camera,
   Image as ImageIcon,
   Loader2,
-  FileDown 
+  FileDown,
+  ShieldCheck // New Icon for Warranty
 } from 'lucide-react';
 
 // --- [已啟用] Word 下載功能套件 ---
@@ -84,6 +85,7 @@ const EQUIPMENT_TYPES = [
   "伺服器", "線路耗材", "其他"
 ];
 const STATUS_OPTIONS = ["未完成", "處理中", "待料中", "已完成"];
+const WARRANTY_OPTIONS = ["未過保", "已過保"]; // 新增保固選項
 
 // --- Helper Functions ---
 const calculateDaysLeft = (startDate) => {
@@ -149,6 +151,7 @@ const generateWordDocument = async (record) => {
       feedbackLog: record.feedbackLog || '', 
       partsUsed: record.partsUsed || '',
       repairStaff: record.repairStaff || '',
+      warrantyStatus: record.warrantyStatus || '', // 傳入保固狀態供 Word 使用
     });
 
     // 6. 產生 Blob
@@ -407,8 +410,9 @@ const RecordForm = ({ formData, setFormData, handleSaveRecord, setIsFormOpen, se
       </button>
     </div>
 
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 bg-gray-50 p-3 rounded border">
-      <div>
+    {/* 改用 5 欄配置，讓保固狀態可以排在第一列 */}
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-3 bg-gray-50 p-3 rounded border">
+      <div className="md:col-span-1">
         <label className="block text-xs font-bold text-gray-500 mb-1">維修主題</label>
         <input required type="text" className="w-full px-2 py-1.5 border rounded focus:ring-1 focus:ring-blue-500 outline-none" 
           value={formData.subject} onChange={e => setFormData({...formData, subject: e.target.value})} />
@@ -425,6 +429,13 @@ const RecordForm = ({ formData, setFormData, handleSaveRecord, setIsFormOpen, se
         <select className="w-full px-2 py-1.5 border rounded font-bold text-blue-700 bg-white focus:ring-1 focus:ring-blue-500 outline-none"
           value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>
           {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+      </div>
+      <div>
+        <label className="block text-xs font-bold text-gray-500 mb-1">保固狀態</label>
+        <select className="w-full px-2 py-1.5 border rounded text-gray-700 bg-white focus:ring-1 focus:ring-blue-500 outline-none"
+          value={formData.warrantyStatus} onChange={e => setFormData({...formData, warrantyStatus: e.target.value})}>
+          {WARRANTY_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
       </div>
       <div>
@@ -588,6 +599,7 @@ export default function App() {
     contactPhone: "",
     maintenanceDate: new Date().toISOString().slice(0, 16),
     status: "未完成",
+    warrantyStatus: "未過保", // 預設值
     reportLog: "",   
     processLog: "",  
     feedbackLog: "", 
@@ -762,6 +774,7 @@ export default function App() {
       contactPhone: record.contactPhone || "",
       maintenanceDate: record.maintenanceDate || new Date().toISOString().slice(0, 16),
       status: record.status || "未完成",
+      warrantyStatus: record.warrantyStatus || "未過保", // 編輯時載入
       reportLog: record.reportLog || "",
       processLog: record.processLog || "",
       feedbackLog: record.feedbackLog || "",
@@ -778,14 +791,15 @@ export default function App() {
   };
 
   const exportCSV = () => {
-    const headers = ["主題", "狀態", "緊急", "設備類型", "地點", "聯絡人", "電話", "日期", "維修內容", "報修過程", "故障排除維修", "故障原因", "使用零件", "維修人員", "圖片連結"];
+    // 增加「保固狀態」欄位到 CSV 匯出
+    const headers = ["主題", "狀態", "緊急", "設備類型", "地點", "聯絡人", "電話", "日期", "維修內容", "報修過程", "故障排除維修", "故障原因", "使用零件", "維修人員", "圖片連結", "保固狀態"];
     const csvContent = [
       headers.join(","),
       ...records.map(r => {
         const row = [
           r.subject, r.status, r.isUrgent ? "是" : "否", r.equipmentType, r.location, r.contactPerson, r.contactPhone, 
           r.maintenanceDate, r.content, r.reportLog, r.processLog, r.feedbackLog,
-          r.partsUsed, r.repairStaff, "圖片太長略過" // CSV 不存 Base64
+          r.partsUsed, r.repairStaff, "圖片太長略過", r.warrantyStatus
         ];
         return row.map(cell => `"${(cell || '').toString().replace(/"/g, '""')}"`).join(",");
       })
@@ -860,7 +874,8 @@ export default function App() {
                feedbackLog: cols[11] || "",
                partsUsed: cols[12] || "",
                repairStaff: cols[13] || "",
-               imageUrl: "", // Import doesn't support Base64 yet
+               imageUrl: "", 
+               warrantyStatus: cols[15] || "未過保", // 匯入保固狀態
                createdAt: serverTimestamp(),
                imported: true
              });
@@ -996,7 +1011,7 @@ export default function App() {
                           <div className="text-xs text-gray-400 mt-1 flex items-center gap-2"><Calendar size={12} /> {formatDate(record.maintenanceDate)}</div>
                         </div>
                         <div className="flex items-center gap-3 shrink-0">
-                          {/* 下載按鈕 - 修正：傳入 record */}
+                          {/* 下載按鈕 */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation(); // 阻止展開
@@ -1034,6 +1049,7 @@ export default function App() {
                              
                              <div className="flex items-center gap-2"><User size={16} className="text-purple-400" /> <span className="font-medium text-purple-700">維修：</span>{record.repairStaff || "-"}</div>
                              <div className="flex items-center gap-2"><Package size={16} className="text-purple-400" /> <span className="font-medium text-purple-700">零件：</span>{record.partsUsed || "-"}</div>
+                             <div className="flex items-center gap-2"><ShieldCheck size={16} className="text-blue-500" /> <span className="font-medium text-blue-700">保固：</span>{record.warrantyStatus || "未過保"}</div>
                           </div>
                           <div className="py-3">
                             <p className="text-sm font-medium text-gray-700 mb-1">維修內容簡述：</p>
