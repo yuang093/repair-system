@@ -53,12 +53,13 @@ import {
 } from 'lucide-react';
 
 // --- Imports for Word Generation ---
-// 注意：為了讓預覽畫面能正常運作，這邊先暫時註解掉第三方套件
-// 請在您的本地端執行： npm install docxtemplater pizzip file-saver
-// 然後將下面三行解除註解 (Uncomment)
-// import PizZip from 'pizzip';
-// import Docxtemplater from 'docxtemplater';
-// import { saveAs } from 'file-saver';
+// 【重要說明】：為了讓線上預覽正常運作，以下三行必須先註解起來。
+// 當您下載到自己電腦執行時，請將這三行「解除註解」 (拿掉前面的 //)。
+// 並確認終端機已執行過： npm install docxtemplater pizzip file-saver
+
+import PizZip from 'pizzip';
+import Docxtemplater from 'docxtemplater';
+import { saveAs } from 'file-saver';
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
@@ -116,18 +117,17 @@ const getQuarter = (dateObj) => {
 
 // --- Word Document Generation Helper ---
 const generateWordDocument = async (record) => {
-  // 注意：以下程式碼需要安裝套件才能運作。
-  // 為了防止預覽崩潰，這裡使用 alert 提示。
-  // 請在本地端將下方的程式碼解除註解，並刪除 alert。
+  // 【本地端設定】：請將下方的 alert 刪除，並將區塊內的程式碼解除註解
   
   alert(
-    "【提示】Word 下載功能需要第三方套件支援。\n\n" +
-    "請在您的專案資料夾執行以下指令安裝：\n" +
-    "npm install docxtemplater pizzip file-saver\n\n" +
-    "安裝後，請打開程式碼 (App.jsx)，將 `generateWordDocument` 內的註解程式碼還原即可。"
+    "【提示】Word 下載功能在此預覽環境無法執行，因為缺少第三方套件。\n\n" +
+    "請在您的電腦上執行以下步驟：\n" +
+    "1. 終端機執行：npm install docxtemplater pizzip file-saver\n" +
+    "2. 在 App.jsx 最上方解除 import 的註解\n" +
+    "3. 在 generateWordDocument 函式中解除邏輯程式碼的註解"
   );
 
-  /* --- 請在本地端解除以下註解 (Uncomment below in local env) ---
+  /* --- 請在本地端解除以下區塊的註解 (Uncomment below in local env) ---
   try {
     // 1. Load the template file from the public folder
     const response = await fetch('/fix.docx');
@@ -160,6 +160,7 @@ const generateWordDocument = async (record) => {
       content: record.content || '',
       reportLog: record.reportLog || '',
       processLog: record.processLog || '', // 對應「備註」/「故障排除」
+      feedbackLog: record.feedbackLog || '', // 對應「故障原因」
       partsUsed: record.partsUsed || '',
       repairStaff: record.repairStaff || '',
     });
