@@ -57,9 +57,9 @@ import {
 // 當您下載到自己電腦執行時，請將這三行「解除註解」 (拿掉前面的 //)。
 // 並確認終端機已執行過： npm install docxtemplater pizzip file-saver
 
-import PizZip from 'pizzip';
-import Docxtemplater from 'docxtemplater';
-import { saveAs } from 'file-saver';
+  import PizZip from 'pizzip';
+  import Docxtemplater from 'docxtemplater';
+  import { saveAs } from 'file-saver';
 
 // --- Firebase Configuration ---
 const firebaseConfig = {
