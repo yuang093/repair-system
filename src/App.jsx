@@ -82,7 +82,7 @@ const ADMIN_PASSWORD = "@113cctv";
 const EQUIPMENT_TYPES = [
   "攝影機", "錄影主機", "不斷電系統", 
   "門禁系統", "廣播系統", "調帶系統", "網路設備", 
-  "伺服器\工作站", "線路耗材", "其他"
+  "伺服器／工作站", "線路耗材", "其他"
 ];
 const STATUS_OPTIONS = ["未完成", "處理中", "待料中", "已完成"];
 const WARRANTY_OPTIONS = ["未過保", "已過保"]; // 新增保固選項
