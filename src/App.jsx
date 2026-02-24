@@ -51,7 +51,7 @@ import {
   Image as ImageIcon,
   Loader2,
   FileDown,
-  ShieldCheck // New Icon for Warranty
+  ShieldCheck
 } from 'lucide-react';
 
 // --- [已啟用] Word 下載功能套件 ---
@@ -114,7 +114,7 @@ const getQuarter = (dateObj) => {
   return `${year} Q4`;
 };
 
-// --- Word Document Generation Helper ---
+// --- Word Document Generation Helper (已修正) ---
 const generateWordDocument = async (record) => {
   try {
     // 1. 讀取 public 資料夾中的樣板檔
@@ -133,25 +133,43 @@ const generateWordDocument = async (record) => {
       linebreaks: true,
     });
 
-    // 4. 準備資料
-    const dateStr = record.maintenanceDate 
+    // 4. 準備時間格式化資料
+    // 單純日期 (給發文日期使用)
+    const dateOnlyStr = record.maintenanceDate 
       ? new Date(record.maintenanceDate).toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' })
       : '';
+      
+    // 發生時間/通知時間 (包含時分)
+    const maintenanceDateStr = record.maintenanceDate 
+      ? new Date(record.maintenanceDate).toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
+      : '';
+
+    // 完成時間 (若狀態為已完成才抓取)
+    let completedDateStr = '';
+    if (record.status === '已完成') {
+      const finishTime = record.completedAt || record.updatedAt; // 優先抓完成時間，若無則抓最後更新時間
+      if (finishTime) {
+        const d = finishTime.toDate ? finishTime.toDate() : new Date(finishTime);
+        completedDateStr = d.toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+      }
+    }
 
     // 5. 渲染文件 (將資料填入 {變數} 中)
     doc.render({
+      date: dateOnlyStr,                           // 對應 Word {date}
+      maintenanceDate: maintenanceDateStr,         // 對應 Word {maintenanceDate}
+      completedDate: completedDateStr,             // 對應 Word {completedDate}
       subject: record.subject || '',
       status: record.status || '',
       location: record.location || '',
       contactPerson: record.contactPerson || '',
-      date: dateStr,
       content: record.content || '',
       reportLog: record.reportLog || '',
       processLog: record.processLog || '', 
-      feedbackLog: record.feedbackLog || '', 
+      feedbackLog: record.feedbackLog || '',       // 對應 Word {feedbackLog} (故障原因)
       partsUsed: record.partsUsed || '',
       repairStaff: record.repairStaff || '',
-      warrantyStatus: record.warrantyStatus || '', // 傳入保固狀態供 Word 使用
+      warrantyStatus: record.warrantyStatus || '',
     });
 
     // 6. 產生 Blob
@@ -706,7 +724,7 @@ export default function App() {
     }
   };
 
-  // 修改後的儲存邏輯: 處理 Base64 壓縮
+  // 修改後的儲存邏輯: 處理 Base64 壓縮，並自動記錄完成時間
   const handleSaveRecord = async (e) => {
     e.preventDefault();
     if (!user) return;
@@ -726,10 +744,13 @@ export default function App() {
         updatedAt: serverTimestamp() 
       };
       
+      // 處理完成時間
       if (formData.status === '已完成') {
         if (!editingRecord || editingRecord.status !== '已完成') {
-          payload.completedAt = serverTimestamp();
+          payload.completedAt = serverTimestamp(); // 如果本來不是已完成，現在改成已完成，就記錄當下時間
         }
+      } else {
+        payload.completedAt = null; // 如果被改回未完成，就清空完成時間
       }
 
       if (editingRecord) {
@@ -791,7 +812,6 @@ export default function App() {
   };
 
   const exportCSV = () => {
-    // 增加「保固狀態」欄位到 CSV 匯出
     const headers = ["主題", "狀態", "緊急", "設備類型", "地點", "聯絡人", "電話", "日期", "維修內容", "報修過程", "故障排除維修", "故障原因", "使用零件", "維修人員", "圖片連結", "保固狀態"];
     const csvContent = [
       headers.join(","),
