@@ -608,6 +608,13 @@ export default function App() {
   const [sortMode, setSortMode] = useState('default');
   const [expandedId, setExpandedId] = useState(null);
 
+  const getLocalDateTimeString = () => {
+    const now = new Date();
+    const offset = now.getTimezoneOffset();
+    const localDate = new Date(now.getTime() - offset * 60 * 1000);
+    return localDate.toISOString().slice(0, 16);
+  };
+
   const initialFormState = {
     subject: "",
     equipmentType: EQUIPMENT_TYPES[0],
@@ -615,7 +622,7 @@ export default function App() {
     location: "",
     contactPerson: "",
     contactPhone: "",
-    maintenanceDate: new Date().toISOString().slice(0, 16),
+    maintenanceDate: getLocalDateTimeString(),
     status: "未完成",
     warrantyStatus: "未過保", // 預設值
     reportLog: "",   
@@ -793,7 +800,7 @@ export default function App() {
       location: record.location || "",
       contactPerson: record.contactPerson || "",
       contactPhone: record.contactPhone || "",
-      maintenanceDate: record.maintenanceDate || new Date().toISOString().slice(0, 16),
+      maintenanceDate: record.maintenanceDate || getLocalDateTimeString(),
       status: record.status || "未完成",
       warrantyStatus: record.warrantyStatus || "未過保", // 編輯時載入
       reportLog: record.reportLog || "",
@@ -942,7 +949,7 @@ export default function App() {
               </button>
             )}
             <button 
-              onClick={() => { setEditingRecord(null); setFormData(initialFormState); setSelectedFile(null); setIsFormOpen(true); }}
+              onClick={() => { setEditingRecord(null); setFormData({...initialFormState, maintenanceDate: getLocalDateTimeString()}); setSelectedFile(null); setIsFormOpen(true); }}
               className="flex items-center gap-2 px-4 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded font-medium shadow-md transition"
             >
               <Plus size={18} /> 新增報修
@@ -1141,7 +1148,7 @@ export default function App() {
       </Modal>
 
       {/* Floating Action Button (Mobile) */}
-      <button onClick={() => { setEditingRecord(null); setFormData(initialFormState); setSelectedFile(null); setIsFormOpen(true); }} className="md:hidden fixed bottom-6 right-6 bg-blue-600 text-white p-4 rounded-full shadow-xl z-30 hover:bg-blue-700 transition"><Plus size={24} /></button>
+      <button onClick={() => { setEditingRecord(null); setFormData({...initialFormState, maintenanceDate: getLocalDateTimeString()}); setSelectedFile(null); setIsFormOpen(true); }} className="md:hidden fixed bottom-6 right-6 bg-blue-600 text-white p-4 rounded-full shadow-xl z-30 hover:bg-blue-700 transition"><Plus size={24} /></button>
     </div>
   );
 }
